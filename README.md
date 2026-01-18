@@ -1,40 +1,38 @@
 # Resource Action Operator
 
-A Kubernetes operator that executes HTTP actions in response to Kubernetes resource events.
+![Kubernetes](https://img.shields.io/badge/kubernetes-operator-blue)
+![Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-green)
+![Status](https://img.shields.io/badge/status-v0.1.0--alpha-orange)
 
-The **Resource Action Operator** allows platform teams to define declarative, event-driven automations using Custom Resources. It is designed to be **secure**, **namespaced**, and **multi-tenant friendly**.
-
----
-
-## ✨ Features
-
-* Reacts to Kubernetes resource **Create / Update / Delete** events
-* Declarative **HTTP actions** (webhooks, APIs, automation endpoints)
-* Namespaced `ResourceAction` CRD (safe for multi-tenant clusters)
-* Regex-based **expectedStatus** validation (e.g. `^2..$`, `^(4..|5..)$`)
-* Retries with backoff, timeouts, TLS & mTLS support
-* Cron-based periodic actions
-* Execution history & Conditions stored in status
-* RBAC-isolated by namespace
+**Repository:** [https://github.com/zdmr-space/resource-action-operator](https://github.com/zdmr-space/resource-action-operator)
 
 ---
 
-## 🧠 Core Concepts
+## Overview
 
-### ResourceAction
+Resource Action Operator is a Kubernetes operator that allows you to execute **HTTP-based actions** in reaction to **Kubernetes resource lifecycle events** (Create / Update / Delete).
+
+It is designed for:
+
+* Platform teams
+* Internal automation
+* Webhook-style integrations
+* GitOps-friendly event handling
+
+Instead of embedding automation logic into applications, you declaratively describe **what should happen when a resource event occurs**.
+
+---
+
+## Core Concepts
+
+### ResourceAction (CRD)
 
 A `ResourceAction` defines:
 
-* **Which Kubernetes resources** to watch (GVK selector)
-* **Which events** trigger actions (Create/Delete)
-* **Optional filters** (name regex, labels)
-* **One or more actions** (HTTP calls)
-
-Each `ResourceAction` is **namespaced**.
-
----
-
-## 📦 Custom Resource Definition
+* **Which resource** to observe (GVK selector)
+* **Which events** to react to (Create / Delete)
+* **Optional filters** (name, namespace, labels)
+* **One or more actions** to execute
 
 ```yaml
 apiVersion: ops.yusaozdemir.de/v1alpha1
@@ -47,90 +45,150 @@ spec:
     group: ""
     version: v1
     kind: Namespace
-
   events:
     - Create
-
   filters:
     nameRegex: "^demo-.*"
-
   actions:
     - type: http
-      mode: once
+      url: https://httpbin.org/post
       method: POST
-      url: https://httpbin.org/status/404
-      expectedStatus: "^(4..|5..)$"
-      timeout: 10s
-      body:
-        template: |
-          {
-            "event": "namespace-created",
-            "name": "{{ .metadata.name }}",
-            "uid": "{{ .metadata.uid }}"
-          }
 ```
 
 ---
 
-## 🔁 Action Modes
+## Actions
 
-### once
+### HTTP Action
 
-Executed once per resource UID and event.
+Currently supported action type:
+
+* `http`
+
+Features:
+
+* Custom HTTP method
+* Headers from Secrets
+* JSON body templating
+* Timeout
+* Retry with backoff
+* TLS / mTLS
+* Expected status validation (regex)
+
+---
+
+### Body Templating
+
+The request body supports Go templates.
+
+Available fields:
+
+```json
+{
+  "metadata": {
+    "name": "<resource name>",
+    "namespace": "<resource namespace>",
+    "uid": "<resource uid>",
+    "labels": { "key": "value" }
+  }
+}
+```
+
+Example:
+
+```yaml
+body:
+  template: |
+    {
+      "event": "namespace-created",
+      "name": "{{ .metadata.name }}",
+      "uid": "{{ .metadata.uid }}"
+    }
+```
+
+---
+
+### expectedStatus (Optional)
+
+You can define which HTTP status codes are considered **successful** using a regex.
+
+```yaml
+expectedStatus: "^2..$"   # default
+expectedStatus: "^(4..|5..)$"
+```
+
+If the response status does not match:
+
+* The action is treated as failed
+* Retries may apply
+* Status is updated accordingly
+
+---
+
+## Retry & Reliability
+
+```yaml
+retry:
+  maxAttempts: 5
+  backoff: 500ms
+  maxBackoff: 10s
+  retryOnStatus:
+    - 429
+    - 500
+```
+
+Supports:
+
+* Exponential backoff with jitter
+* Retry on network errors
+* Retry on configurable HTTP status codes
+
+---
+
+## TLS & mTLS
+
+```yaml
+tls:
+  insecureSkipVerify: false
+  caSecretRef:
+    name: ca-cert
+    key: ca.pem
+  clientCertSecretRef:
+    name: client-cert
+    certKey: tls.crt
+    keyKey: tls.key
+```
+
+* Uses Kubernetes Secrets
+* Namespaced isolation
+* Supports full mTLS
+
+---
+
+## Action Modes
+
+### once (default)
+
+Executed **once per resource UID + event**.
+
+Duplicate executions are prevented.
 
 ### cron
-
-Executed periodically using a Go duration (e.g. `30s`, `5m`).
 
 ```yaml
 mode: cron
 schedule: 30s
 ```
 
----
-
-## 🌐 HTTP Action Options
-
-| Field          | Description                                 |
-| -------------- | ------------------------------------------- |
-| method         | HTTP method (default: POST)                 |
-| url            | Target endpoint                             |
-| headers        | Static or secret-based headers              |
-| body.template  | Go template rendered from resource metadata |
-| timeout        | Request timeout                             |
-| expectedStatus | Regex matching HTTP status code             |
-| retry          | Retry policy                                |
-| tls            | TLS / mTLS configuration                    |
+* Periodic execution
+* Independent of resource events
+* Useful for heartbeats or sync jobs
 
 ---
 
-## 🔐 Security Model
+## Status & Conditions
 
-### Namespaced Isolation
-
-* `ResourceAction` is namespaced
-* Teams can only create actions in their namespace
-* No cross-namespace execution
-
-### RBAC
-
-**Team Role Example:**
-
-```yaml
-kind: Role
-rules:
-- apiGroups: ["ops.yusaozdemir.de"]
-  resources: ["resourceactions"]
-  verbs: ["get","list","watch","create","update","delete"]
-```
-
-The operator itself runs with a ClusterRole that allows watching resources and updating status.
-
----
-
-## 📊 Status & Conditions
-
-Each execution updates status:
+Each ResourceAction maintains execution history and readiness state.
 
 ```yaml
 status:
@@ -139,84 +197,104 @@ status:
       status: "True"
       reason: ActionSucceeded
       message: All actions executed successfully
-      lastTransitionTime: "2026-01-18T14:08:02Z"
-
   executions:
     - event: Create
-      resourceUID: 075e834a-64f3-4401-a958-67511d5bd4b7
-      executedAt: "2026-01-18T14:08:02Z"
+      resourceUID: <uid>
+      executedAt: <timestamp>
 ```
+
+* `Ready=True` → last execution successful
+* `Ready=False` → last execution failed
 
 ---
 
-## 🚀 Deployment
+## RBAC & Security Model
 
-### Prerequisites
+Security is **namespace-scoped by design**:
 
-* Kubernetes >= 1.27
-* kubectl
-* Go 1.22+
+* ResourceActions are namespaced
+* Secrets are read only from the same namespace
+* No cross-namespace execution
+* Operator only updates its own CR status
 
-### Install CRD
+Recommended:
+
+* One operator instance per cluster
+* Use namespaces to isolate teams/projects
+
+---
+
+## Installation
+
+### Local Development
 
 ```bash
-kubectl apply -f config/crd/bases/resourceactions.ops.yusaozdemir.de.yaml
-```
-
-### Run Locally (Development)
-
-```bash
+make manifests
 make run
 ```
 
-### Deploy to Cluster
+Uses your current kubeconfig.
+
+---
+
+### Cluster Deployment
+
+Apply CRD:
 
 ```bash
-make docker-build docker-push IMG=<your-image>
-make deploy IMG=<your-image>
+kubectl apply -f https://raw.githubusercontent.com/zdmr-space/resource-action-operator/v0.1.0/config/crd/bases/resourceactions.ops.yusaozdemir.de.yaml
+```
+
+Deploy controller (example):
+
+```bash
+kubectl apply -f config/manager/manager.yaml
 ```
 
 ---
 
-## 🧪 Testing
+## Testing
 
 ```bash
 kubectl create namespace demo-test
 kubectl delete namespace demo-test
 
-kubectl describe resourceaction namespace-create-once
+kubectl describe resourceaction
 ```
 
 ---
 
-## 🧭 Roadmap
+## Roadmap
 
-* ValidatingWebhook (URL allowlists)
-* Metrics (Prometheus)
+Planned for future releases:
+
 * Helm chart
-* Action chaining
-* Audit logging
+* ValidatingAdmissionWebhook
+* URL allowlists
+* Metrics / Prometheus
+* Multi-action chaining
 
 ---
 
-## 📜 License
+## Contributing
+
+Contributions are welcome!
+
+1. Fork the repository
+2. Create a feature branch
+3. Add tests & documentation
+4. Open a pull request
+
+---
+
+## License
 
 Apache License 2.0
 
 ---
 
-## ❤️ Contributing
+## Maintainer
 
-Contributions are welcome!
-
-* Fork the repo
-* Create a feature branch
-* Add tests if applicable
-* Open a Pull Request
-
----
-
-## ✉️ Maintainer
-
-Created by **Batur Yusa Özdemir** and **Ahmet Taha Özdemir**
-
+**Batur Yusa Özdemir**
+**Ahmet Taha Özdemir**
+GitHub: [https://github.com/zdmr-space](https://github.com/zdmr-space)
