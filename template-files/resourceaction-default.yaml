@@ -1,0 +1,43 @@
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: namespace-create-hook
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Namespace
+  events:
+    - Create
+  actions:
+    - type: http
+      mode: once
+      method: POST
+      url: https://httpbin.org/post
+    - type: http
+      method: POST
+      url: https://httpbin.org/post
+      body:
+        template: |
+          {
+            "name": "{{ .name }}",
+            "namespace": "{{ .namespace }}"
+          }
+---
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: namespace-delete-hook
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Namespace
+  events:
+    - Delete
+  actions:
+    - type: http
+      mode: once
+      method: POST
+      url: https://httpbin.org/post
+

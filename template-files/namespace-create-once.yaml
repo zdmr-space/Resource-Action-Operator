@@ -1,0 +1,88 @@
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: namespace-create-once
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Namespace
+
+  events:
+    - Create
+
+  filters:
+    nameRegex: "^demo-.*"
+
+  actions:
+    - type: http
+      method: POST
+      url: https://httpbin.org/status/404
+      mode: once
+      expectedStatus: "^(4..|5..)$"
+      body:
+        template: |
+          {
+            "event": "namespace-created",
+            "name": "{{ .metadata.name }}",
+            "uid": "{{ .metadata.uid }}"
+          }
+---
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: namespace-create-cron
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Namespace
+
+  events:
+    - Create
+
+  filters:
+    nameRegex: "^demo-.*"
+
+  actions:
+    - type: http
+      method: POST
+      url: https://httpbin.org/post
+      mode: cron
+      schedule: "30s"
+      body:
+        template: |
+          {
+            "event": "namespace-heartbeat",
+            "name": "{{ .metadata.name }}",
+            "timestamp": "{{ now }}"
+          }
+---
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: namespace-delete-once
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Namespace
+
+  events:
+    - Delete
+
+  filters:
+    nameRegex: "^demo-.*"
+
+  actions:
+    - type: http
+      method: POST
+      url: https://httpbin.org/post
+      mode: once
+      body:
+        template: |
+          {
+            "event": "namespace-deleted",
+            "name": "{{ .metadata.name }}"
+          }
+

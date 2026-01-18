@@ -1,0 +1,9 @@
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  labels:
+    app.kubernetes.io/name: resource-action-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: resourceaction-sample
+spec:
+  # TODO(user): Add fields here
