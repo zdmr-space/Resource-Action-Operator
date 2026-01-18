@@ -1,0 +1,16 @@
+version: 0.1.0
+name: resource-action-operator
+displayName: Resource Action Operator
+description: |
+  Kubernetes operator to execute HTTP actions on resource lifecycle events.
+type: operator
+license: Apache-2.0
+homeURL: https://github.com/zdmr-space/resource-action-operator
+keywords:
+  - operator
+  - kubernetes
+  - automation
+  - webhook
+maintainers:
+  - name: Yusa Özdemir
+    email: mail@yusaozdemir.de
