@@ -1,0 +1,14 @@
+Resource Action Job has been installed.
+
+ResourceAction:
+  kubectl -n {{ default .Release.Namespace .Values.resourceAction.namespace }} get resourceaction {{ include "raj.resourceActionName" . }}
+
+If you created a dedicated ServiceAccount:
+  kubectl -n {{ default .Release.Namespace .Values.resourceAction.namespace }} get sa {{ include "raj.serviceAccountName" . }}
+
+The job image can be configured with:
+  --set job.image.registry=registry.example.com
+  --set job.image.repository=team/bash-runner
+  --set job.image.tag=1.0.0
+or:
+  --set job.image.digest=sha256:<digest>

@@ -18,10 +18,9 @@ resources:
 - ../crd
 - ../rbac
 - ../manager
-# [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in
-# crd/kustomization.yaml
+# [WEBHOOK] Optional: enable via config/default-webhook overlay.
 #- ../webhook
-# [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.
+# [CERTMANAGER] Optional: enable via config/default-webhook overlay.
 #- ../certmanager
 # [PROMETHEUS] To enable prometheus monitor, uncomment all sections with 'PROMETHEUS'.
 #- ../prometheus
@@ -117,11 +116,11 @@ patches:
 #         index: 1
 #         create: true
 #
-# - source: # Uncomment the following block if you have any webhook
+# - source: # webhook service name
 #     kind: Service
 #     version: v1
 #     name: webhook-service
-#     fieldPath: .metadata.name # Name of the service
+#     fieldPath: .metadata.name
 #   targets:
 #     - select:
 #         kind: Certificate
@@ -135,11 +134,11 @@ patches:
 #         delimiter: '.'
 #         index: 0
 #         create: true
-# - source:
+# - source: # webhook service namespace
 #     kind: Service
 #     version: v1
 #     name: webhook-service
-#     fieldPath: .metadata.namespace # Namespace of the service
+#     fieldPath: .metadata.namespace
 #   targets:
 #     - select:
 #         kind: Certificate
@@ -154,12 +153,12 @@ patches:
 #         index: 1
 #         create: true
 #
-# - source: # Uncomment the following block if you have a ValidatingWebhook (--programmatic-validation)
+# - source: # cert namespace for CA injection
 #     kind: Certificate
 #     group: cert-manager.io
 #     version: v1
-#     name: serving-cert # This name should match the one in certificate.yaml
-#     fieldPath: .metadata.namespace # Namespace of the certificate CR
+#     name: serving-cert
+#     fieldPath: .metadata.namespace
 #   targets:
 #     - select:
 #         kind: ValidatingWebhookConfiguration
@@ -169,7 +168,7 @@ patches:
 #         delimiter: '/'
 #         index: 0
 #         create: true
-# - source:
+# - source: # cert name for CA injection
 #     kind: Certificate
 #     group: cert-manager.io
 #     version: v1

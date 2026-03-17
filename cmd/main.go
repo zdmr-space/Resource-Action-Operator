@@ -153,7 +153,7 @@ func main() {
 	// =========================
 	// Event Engine initialisieren
 	// =========================
-	exec := engine.NewK8sExecutor(mgr.GetClient())
+	exec := engine.NewK8sExecutor(mgr.GetClient(), mgr.GetEventRecorderFor("resource-action-operator"))
 
 	eng, err := engine.New(mgr.GetConfig(), exec)
 	if err != nil {
@@ -167,6 +167,10 @@ func main() {
 		Engine: eng,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceAction")
+		os.Exit(1)
+	}
+	if err = (&opsv1alpha1.ResourceAction{}).SetupWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "ResourceAction")
 		os.Exit(1)
 	}
 

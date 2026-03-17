@@ -1,0 +1,57 @@
+= Documentation Workspace
+:toc:
+:toclevels: 2
+
+This directory is the starting point for publishable AsciiDoc documentation.
+
+Current default deployment path in this project is Helm (`charts/resource-action-operator`), while Kustomize stays available as an optional development path.
+
+== Structure
+
+----
+docs/
+  antora.yml
+  modules/
+    ROOT/
+      nav.adoc
+      pages/
+        index.adoc
+        quickstart.adoc
+        helm.adoc
+        demo.adoc
+----
+
+Important pages for recent deployment and demo changes:
+
+- `docs/modules/ROOT/pages/index.adoc`
+- `docs/modules/ROOT/pages/quickstart.adoc`
+- `docs/modules/ROOT/pages/demo.adoc`
+
+== Publishing Options
+
+=== Asciidoctor (single pages)
+
+Best for local preview or simple HTML output.
+
+[source,bash]
+----
+asciidoctor docs/modules/ROOT/pages/index.adoc
+----
+
+=== Antora (multi-page docs site)
+
+Best for versioned documentation and publishing.
+
+[source,bash]
+----
+# Example:
+antora --stacktrace docs-site-playbook.yml
+----
+
+Note: A minimal Antora component descriptor (`docs/antora.yml`) is already included.
+
+== Suggested Next Steps
+
+. Add a playbook for your target platform (for example GitLab Pages, GitHub Pages, Netlify).
+. Add a CI job that builds and publishes docs on merge.
+. Add architecture, API, and runbook pages under `docs/modules/ROOT/pages/`.

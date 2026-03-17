@@ -1,0 +1,12 @@
+= Contributing
+:page-title: Contributing
+
+See the repository contribution guide:
+
+- link:../../../../../CONTRIBUTING.md[CONTRIBUTING.md]
+
+== Quick Checklist
+
+- run `make test`
+- update docs for behavior changes
+- keep comments and user-facing text in English

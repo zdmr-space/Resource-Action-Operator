@@ -3,7 +3,7 @@
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
 # - use the VERSION as arg of the bundle target (e.g make bundle VERSION=0.0.2)
 # - use environment variables to overwrite this value (e.g export VERSION=0.0.2)
-VERSION ?= 0.0.1
+VERSION ?= 0.2.0
 
 # CHANNELS define the bundle channels used in the bundle.
 # Add a new line here if you would like to change its default config. (E.g CHANNELS = "candidate,fast,stable")
@@ -51,6 +51,9 @@ endif
 OPERATOR_SDK_VERSION ?= v1.42.0
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+HELM_RELEASE ?= resource-action-operator
+HELM_NAMESPACE ?= resource-action-operator-system
+HELM_CHART ?= charts/resource-action-operator
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -216,9 +219,40 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
+.PHONY: deploy-webhook
+deploy-webhook: manifests kustomize ## Deploy controller with admission webhook + cert-manager resources.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default-webhook | $(KUBECTL) apply -f -
+
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+.PHONY: undeploy-webhook
+undeploy-webhook: kustomize ## Undeploy webhook-enabled controller stack.
+	$(KUSTOMIZE) build config/default-webhook | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+.PHONY: helm-lint
+helm-lint: ## Lint Helm chart.
+	$(HELM) lint $(HELM_CHART)
+
+.PHONY: helm-template
+helm-template: ## Render Helm chart manifests (default mode, no cert-manager required).
+	$(HELM) template $(HELM_RELEASE) $(HELM_CHART) --namespace $(HELM_NAMESPACE)
+
+.PHONY: helm-install
+helm-install: ## Install/upgrade operator via Helm (default mode, no cert-manager required).
+	$(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) --namespace $(HELM_NAMESPACE) --create-namespace
+
+.PHONY: helm-install-webhook
+helm-install-webhook: ## Install/upgrade operator via Helm with admission webhook and cert-manager resources.
+	$(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) --namespace $(HELM_NAMESPACE) --create-namespace \
+		--set webhook.enabled=true \
+		--set webhook.certManager.enabled=true
+
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall Helm release.
+	$(HELM) uninstall $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)
 
 ##@ Dependencies
 
@@ -230,6 +264,7 @@ $(LOCALBIN):
 ## Tool Binaries
 KUBECTL ?= kubectl
 KIND ?= kind
+HELM ?= helm
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest

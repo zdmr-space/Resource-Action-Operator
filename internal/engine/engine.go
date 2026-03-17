@@ -95,7 +95,7 @@ func New(cfg *rest.Config, executor Executor) (*Engine, error) {
 	}, nil
 }
 
-// Resolve GVK -> GVR via discovery RESTMapping
+// Resolve GVK -> GVR via discovery REST mapping.
 func (e *Engine) ResolveGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) {
 	gr, err := restMapping(e.disco, gvk)
 	if err != nil {
@@ -104,7 +104,7 @@ func (e *Engine) ResolveGVR(gvk schema.GroupVersionKind) (schema.GroupVersionRes
 	return gr, nil
 }
 
-// EnsureWatching sorgt dafür, dass ein Informer für die Ressource läuft.
+// EnsureWatching makes sure an informer for this resource is running.
 func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind) error {
 	log := log.FromContext(ctx)
 
@@ -117,7 +117,7 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 	defer e.mu.Unlock()
 
 	if _, ok := e.informers[gvr]; ok {
-		return nil // läuft schon
+		return nil // already running
 	}
 
 	inf := e.factory.ForResource(gvr).Informer()
@@ -139,7 +139,7 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 			if !ok {
 				return
 			}
-			// Optional: nur reagieren wenn resourceVersion sich ändert
+			// Optional: only react if resourceVersion changed.
 			e.onEvent(context.Background(), MatchInput{
 				Event: EventUpdate,
 				GVK:   gvk,
@@ -147,7 +147,7 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 			})
 		},
 		DeleteFunc: func(obj interface{}) {
-			// Delete kann Tombstone sein
+			// Delete may come as a tombstone.
 			var u *unstructured.Unstructured
 			switch t := obj.(type) {
 			case *unstructured.Unstructured:
@@ -170,7 +170,7 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 	e.informers[gvr] = inf
 	log.Info("Started watching resource", "gvk", gvk.String(), "gvr", gvr.String())
 
-	// Factory starten (einmalig)
+	// Start factory once.
 	if !e.started {
 		e.started = true
 		e.cronEngine.Start(ctx)
@@ -183,20 +183,20 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 func (e *Engine) onEvent(ctx context.Context, input MatchInput) {
 	logger := log.FromContext(ctx)
 
-	// 1️⃣ Cron-Jobs sicherstellen (einmalig)
+	// 1) Ensure cron jobs are registered (once).
 	err := e.cronEngine.EnsureForMatch(ctx, input)
 	if err != nil {
 		logger.Error(err, "failed to ensure cron jobs")
 	}
 
-	// 2️⃣ Event-basierte Actions ausführen (once)
+	// 2) Execute event-based actions (once mode).
 	if err := e.executor.Execute(ctx, input); err != nil {
 		logger.Error(err, "executor failed")
 	}
 }
 
 func restMapping(d discovery.DiscoveryInterface, gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) {
-	// Discovery: alle Ressourcen der Version holen
+	// Discovery: list all resources for this group/version.
 	resources, err := d.ServerResourcesForGroupVersion(gvk.GroupVersion().String())
 	if err != nil {
 		return schema.GroupVersionResource{}, err

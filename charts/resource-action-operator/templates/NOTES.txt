@@ -1,0 +1,10 @@
+Resource Action Operator has been installed.
+
+Default mode (no cert-manager):
+  - Admission webhook is disabled.
+
+Enable webhook + cert-manager mode with Helm values:
+  --set webhook.enabled=true --set webhook.certManager.enabled=true
+
+Check resources:
+  kubectl -n {{ .Release.Namespace }} get deploy,svc,sa

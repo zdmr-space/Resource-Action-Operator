@@ -1,0 +1,52 @@
+nameOverride: ""
+fullnameOverride: ""
+
+resourceAction:
+  create: true
+  name: ""
+  namespace: ""
+
+selector:
+  group: apps
+  version: v1
+  kind: Deployment
+
+events:
+  - Create
+
+filters: {}
+
+job:
+  mode: once
+  schedule: ""
+
+  image:
+    registry: ""
+    repository: bash
+    tag: "5.2"
+    digest: ""
+
+  interpreterCommand:
+    - /bin/bash
+    - -c
+
+  script: |
+    echo "deployment created"
+
+  command: []
+  args: []
+
+  env: []
+  volumes: []
+  volumeMounts: []
+
+  serviceAccount:
+    create: false
+    name: ""
+    annotations: {}
+
+  automountServiceAccountToken: false
+  timeout: 30s
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  resources: {}

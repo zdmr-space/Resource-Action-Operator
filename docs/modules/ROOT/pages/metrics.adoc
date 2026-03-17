@@ -1,0 +1,79 @@
+= Metrics
+:page-title: Metrics
+
+The operator exposes Prometheus metrics on the controller-runtime metrics endpoint.
+
+== Access Metrics Locally
+
+Forward the metrics service port from the operator namespace:
+
+[source,bash]
+----
+kubectl -n resource-action-operator-system port-forward svc/resource-action-operator-controller-manager-metrics-service 8443:8443
+----
+
+In another terminal, query the endpoint:
+
+[source,bash]
+----
+curl -k https://127.0.0.1:8443/metrics | grep resource_action_operator_
+----
+
+== Exported Metrics
+
+- `resource_action_operator_http_runs_total{result}`
+- `resource_action_operator_http_actions_total`
+- `resource_action_operator_http_attempts_total`
+- `resource_action_operator_http_retries_total{type}`
+- `resource_action_operator_http_backoff_seconds_total`
+- `resource_action_operator_http_duration_seconds{result}`
+- `resource_action_operator_http_last_status_total{class}`
+
+== Useful PromQL Queries
+
+Total successful runs:
+
+[source,promql]
+----
+sum(resource_action_operator_http_runs_total{result="success"})
+----
+
+Total failed runs:
+
+[source,promql]
+----
+sum(resource_action_operator_http_runs_total{result="failure"})
+----
+
+Failure ratio over the last 5 minutes:
+
+[source,promql]
+----
+sum(rate(resource_action_operator_http_runs_total{result="failure"}[5m]))
+/
+sum(rate(resource_action_operator_http_runs_total[5m]))
+----
+
+Retry rate by type (`network` vs `status`):
+
+[source,promql]
+----
+sum by (type) (rate(resource_action_operator_http_retries_total[5m]))
+----
+
+P95 execution duration:
+
+[source,promql]
+----
+histogram_quantile(
+  0.95,
+  sum by (le, result) (rate(resource_action_operator_http_duration_seconds_bucket[5m]))
+)
+----
+
+HTTP status class distribution:
+
+[source,promql]
+----
+sum by (class) (rate(resource_action_operator_http_last_status_total[5m]))
+----

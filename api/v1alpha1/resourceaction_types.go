@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -45,14 +46,15 @@ type FilterSpec struct {
 }
 
 type ActionSpec struct {
-	// +kubebuilder:validation:Enum=http
+	// +kubebuilder:validation:Enum=http;job
 	Type string `json:"type"`
 
 	// +kubebuilder:default=POST
-	Method  string               `json:"method,omitempty"`
-	URL     string               `json:"url,omitempty"`
-	Headers map[string]ValueFrom `json:"headers,omitempty"`
-	Body    *TemplateSpec        `json:"body,omitempty"`
+	Method    string               `json:"method,omitempty"`
+	URL       string               `json:"url,omitempty"`
+	URLPolicy *URLPolicySpec       `json:"urlPolicy,omitempty"`
+	Headers   map[string]ValueFrom `json:"headers,omitempty"`
+	Body      *TemplateSpec        `json:"body,omitempty"`
 
 	ExpectedStatus string `json:"expectedStatus,omitempty"`
 
@@ -67,41 +69,49 @@ type ActionSpec struct {
 
 	Retry *RetrySpec `json:"retry,omitempty"`
 	TLS   *TLSSpec   `json:"tls,omitempty"`
+
+	Job *JobSpec `json:"job,omitempty"`
 }
 
 type RetrySpec struct {
 	// +kubebuilder:default=1
 	MaxAttempts int `json:"maxAttempts,omitempty"`
 
-	// Basis Backoff, z.B. "500ms"
+	// Base backoff, for example "500ms".
 	// +kubebuilder:default="500ms"
 	Backoff string `json:"backoff,omitempty"`
 
-	// Max Backoff, z.B. "10s"
+	// Max backoff, for example "10s".
 	// +kubebuilder:default="10s"
 	MaxBackoff string `json:"maxBackoff,omitempty"`
 
-	// Retry bei Netzwerkfehlern
+	// Retry on network errors.
 	// +kubebuilder:default=true
 	RetryOnNetworkError *bool `json:"retryOnNetworkError,omitempty"`
 
-	// Statuscodes die retrybar sind
+	// Status codes that should be retried.
 	// +kubebuilder:default:={429,500,502,503,504}
 	RetryOnStatus []int `json:"retryOnStatus,omitempty"`
 }
 
+type URLPolicySpec struct {
+	AllowUnsafeLocalTargets bool     `json:"allowUnsafeLocalTargets,omitempty"`
+	AllowedHostRegex        []string `json:"allowedHostRegex,omitempty"`
+	BlockedHostRegex        []string `json:"blockedHostRegex,omitempty"`
+}
+
 type TLSSpec struct {
-	// HTTPS verify deaktivieren (dev)
+	// Disable HTTPS verification (development only).
 	// +kubebuilder:default=false
 	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
 
-	// Optional: SNI/ServerName
+	// Optional SNI/server name override.
 	ServerName string `json:"serverName,omitempty"`
 
-	// CA Bundle aus Secret (PEM), default key: ca.crt
+	// CA bundle from a secret (PEM), default key: ca.crt.
 	CaSecretRef *SecretKeyRef `json:"caSecretRef,omitempty"`
 
-	// mTLS Client Cert/Key aus Secret, default keys: tls.crt/tls.key
+	// mTLS client cert/key from secret, default keys: tls.crt/tls.key.
 	ClientCertSecretRef *TLSClientCertRef `json:"clientCertSecretRef,omitempty"`
 }
 
@@ -117,6 +127,62 @@ type TLSClientCertRef struct {
 
 type TemplateSpec struct {
 	Template string `json:"template"`
+}
+
+type JobSpec struct {
+	Image string `json:"image"`
+
+	Command []string `json:"command,omitempty"`
+	Args    []string `json:"args,omitempty"`
+
+	Script string `json:"script,omitempty"`
+	// InterpreterCommand is used when script is set.
+	// Example: ["/bin/bash", "-c"].
+	InterpreterCommand []string `json:"interpreterCommand,omitempty"`
+
+	Env []JobEnvVar `json:"env,omitempty"`
+
+	Volumes      []JobVolume      `json:"volumes,omitempty"`
+	VolumeMounts []JobVolumeMount `json:"volumeMounts,omitempty"`
+
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// +kubebuilder:default=false
+	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty"`
+
+	// +kubebuilder:default="30s"
+	Timeout string `json:"timeout,omitempty"`
+
+	TTLSecondsAfterFinished *int32                       `json:"ttlSecondsAfterFinished,omitempty"`
+	BackoffLimit            *int32                       `json:"backoffLimit,omitempty"`
+	Resources               *corev1.ResourceRequirements `json:"resources,omitempty"`
+}
+
+type JobEnvVar struct {
+	Name      string     `json:"name"`
+	Value     string     `json:"value,omitempty"`
+	ValueFrom *ValueFrom `json:"valueFrom,omitempty"`
+}
+
+type JobVolume struct {
+	Name      string              `json:"name"`
+	Secret    *JobSecretVolume    `json:"secret,omitempty"`
+	ConfigMap *JobConfigMapVolume `json:"configMap,omitempty"`
+}
+
+type JobSecretVolume struct {
+	SecretName string `json:"secretName"`
+}
+
+type JobConfigMapVolume struct {
+	Name string `json:"name"`
+}
+
+type JobVolumeMount struct {
+	Name      string `json:"name"`
+	MountPath string `json:"mountPath"`
+	// +kubebuilder:default=true
+	ReadOnly *bool `json:"readOnly,omitempty"`
 }
 
 type ValueFrom struct {
@@ -158,6 +224,15 @@ type ExecutionRecord struct {
 	ResourceUID string      `json:"resourceUID"`
 	Event       string      `json:"event"`
 	ExecutedAt  metav1.Time `json:"executedAt"`
+
+	ActionCount       int   `json:"actionCount,omitempty"`
+	Attempts          int   `json:"attempts,omitempty"`
+	RetryCount        int   `json:"retryCount,omitempty"`
+	NetworkRetryCount int   `json:"networkRetryCount,omitempty"`
+	StatusRetryCount  int   `json:"statusRetryCount,omitempty"`
+	BackoffMillis     int64 `json:"backoffMillis,omitempty"`
+	DurationMillis    int64 `json:"durationMillis,omitempty"`
+	LastHTTPStatus    int   `json:"lastHttpStatus,omitempty"`
 }
 
 func init() {

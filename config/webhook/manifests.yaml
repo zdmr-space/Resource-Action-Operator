@@ -1,0 +1,26 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-ops-yusaozdemir-de-v1alpha1-resourceaction
+  failurePolicy: Fail
+  name: vresourceaction.kb.io
+  rules:
+  - apiGroups:
+    - ops.yusaozdemir.de
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - resourceactions
+  sideEffects: None

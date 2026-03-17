@@ -46,8 +46,8 @@ func (c *CronEngine) Start(ctx context.Context) {
 	c.started = true
 }
 
-// EnsureForMatch wird bei JEDEM Event aufgerufen,
-// registriert aber Cron-Jobs nur einmal.
+// EnsureForMatch is called on every event,
+// but registers cron jobs only once.
 func (c *CronEngine) EnsureForMatch(ctx context.Context, input MatchInput) error {
 	logger := log.FromContext(ctx)
 
@@ -57,7 +57,7 @@ func (c *CronEngine) EnsureForMatch(ctx context.Context, input MatchInput) error
 	}
 
 	for _, ra := range list.Items {
-		// Selector / Event Match
+		// Selector / Event match
 		if !matchesSelector(ra.Spec.Selector, input.GVK) {
 			continue
 		}
@@ -66,7 +66,7 @@ func (c *CronEngine) EnsureForMatch(ctx context.Context, input MatchInput) error
 		}
 
 		for i, action := range ra.Spec.Actions {
-			if action.Mode != "schedule" {
+			if action.Mode != "cron" && action.Mode != "schedule" {
 				continue
 			}
 			if action.Schedule == "" {
@@ -130,7 +130,7 @@ func (c *CronEngine) runCron(
 			return
 
 		case <-ticker.C:
-			// Existiert Ressource noch?
+			// Verify the ResourceAction still exists.
 			if input.Event != EventDelete {
 				exists := &opsv1alpha1.ResourceAction{}
 				err := c.client.Get(context.Background(), client.ObjectKey{

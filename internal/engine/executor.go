@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -11,17 +12,23 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type K8sExecutor struct {
-	Client client.Client
+	Client   client.Client
+	Recorder record.EventRecorder
 }
 
-func NewK8sExecutor(c client.Client) *K8sExecutor {
-	return &K8sExecutor{Client: c}
+func NewK8sExecutor(c client.Client, recorder ...record.EventRecorder) *K8sExecutor {
+	exec := &K8sExecutor{Client: c}
+	if len(recorder) > 0 {
+		exec.Recorder = recorder[0]
+	}
+	return exec
 }
 
 func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
@@ -34,6 +41,14 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 
 	for _, ra := range list.Items {
 		var execErr error
+		executedAny := false
+		executedActions := 0
+		totalAttempts := 0
+		totalNetworkRetries := 0
+		totalStatusRetries := 0
+		totalBackoffMillis := int64(0)
+		totalDurationMillis := int64(0)
+		lastHTTPStatus := 0
 
 		if !matchesSelector(ra.Spec.Selector, input.GVK) {
 			continue
@@ -54,15 +69,13 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 		}
 
 		httpExec := NewHTTPExecutor(e.Client)
+		jobExec := NewJobExecutor(e.Client)
 
 		for i, action := range ra.Spec.Actions {
-
-			if action.Mode == "cron" {
+			if action.Mode == "cron" || action.Mode == "schedule" {
 				continue
 			}
-			if action.Type != "http" {
-				continue
-			}
+			executedAny = true
 
 			logger.Info("Executing action",
 				"resourceAction", ra.Name,
@@ -72,23 +85,59 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 				"name", input.Obj.GetName(),
 			)
 
-			headersResolved, err := e.resolveHeaders(ctx, action.Headers, ra.Namespace)
-			if err != nil {
-				execErr = err
-				break
-			}
+			switch action.Type {
+			case "http":
+				headersResolved, err := e.resolveHeaders(ctx, action.Headers, ra.Namespace)
+				if err != nil {
+					execErr = err
+					break
+				}
 
-			if err := httpExec.Execute(ctx, action, ra.Namespace, input.Obj, headersResolved); err != nil {
-				execErr = err
+				metrics, err := httpExec.ExecuteWithMetrics(ctx, action, ra.Namespace, input.Obj, headersResolved)
+				totalAttempts += metrics.Attempts
+				totalNetworkRetries += metrics.NetworkRetryCount
+				totalStatusRetries += metrics.StatusRetryCount
+				totalBackoffMillis += metrics.BackoffMillis
+				totalDurationMillis += metrics.DurationMillis
+				if metrics.StatusCode > 0 {
+					lastHTTPStatus = metrics.StatusCode
+				}
+				executedActions++
+				if err != nil {
+					execErr = err
+					break
+				}
+			case "job":
+				jobMetrics, err := jobExec.Execute(ctx, ra, i, action, input)
+				totalAttempts += jobMetrics.Attempts
+				totalDurationMillis += jobMetrics.DurationMillis
+				executedActions++
+				if err != nil {
+					execErr = err
+					break
+				}
+			default:
+				execErr = fmt.Errorf("unsupported action type %q", action.Type)
 				break
 			}
+		}
+		if !executedAny {
+			continue
 		}
 
 		// ---- Status Update (CONFLICT-SAFE) ----
 		record := opsv1alpha1.ExecutionRecord{
-			ResourceUID: string(input.Obj.GetUID()),
-			Event:       string(input.Event),
-			ExecutedAt:  metav1.Now(),
+			ResourceUID:       string(input.Obj.GetUID()),
+			Event:             string(input.Event),
+			ExecutedAt:        metav1.Now(),
+			ActionCount:       executedActions,
+			Attempts:          totalAttempts,
+			RetryCount:        totalNetworkRetries + totalStatusRetries,
+			NetworkRetryCount: totalNetworkRetries,
+			StatusRetryCount:  totalStatusRetries,
+			BackoffMillis:     totalBackoffMillis,
+			DurationMillis:    totalDurationMillis,
+			LastHTTPStatus:    lastHTTPStatus,
 		}
 
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -128,12 +177,65 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 			return err
 		}
 
-		if execErr != nil {
+		if execErr != nil && executedActions > 0 {
+			observeHTTPExecution("failure", HTTPExecutionRecordMetrics{
+				ActionCount:       executedActions,
+				Attempts:          totalAttempts,
+				NetworkRetryCount: totalNetworkRetries,
+				StatusRetryCount:  totalStatusRetries,
+				BackoffMillis:     totalBackoffMillis,
+				DurationMillis:    totalDurationMillis,
+				LastHTTPStatus:    lastHTTPStatus,
+			})
+			e.emitEvent(&ra, corev1.EventTypeWarning, "ActionFailed", record, execErr)
 			return execErr
 		}
+
+		if totalAttempts > 0 || lastHTTPStatus > 0 || totalDurationMillis > 0 {
+			observeHTTPExecution("success", HTTPExecutionRecordMetrics{
+				ActionCount:       executedActions,
+				Attempts:          totalAttempts,
+				NetworkRetryCount: totalNetworkRetries,
+				StatusRetryCount:  totalStatusRetries,
+				BackoffMillis:     totalBackoffMillis,
+				DurationMillis:    totalDurationMillis,
+				LastHTTPStatus:    lastHTTPStatus,
+			})
+		}
+		e.emitEvent(&ra, corev1.EventTypeNormal, "ActionSucceeded", record, nil)
 	}
 
 	return nil
+}
+
+func (e *K8sExecutor) emitEvent(
+	ra *opsv1alpha1.ResourceAction,
+	eventType string,
+	reason string,
+	record opsv1alpha1.ExecutionRecord,
+	execErr error,
+) {
+	if e.Recorder == nil {
+		return
+	}
+
+	msg := fmt.Sprintf(
+		"event=%s actions=%d attempts=%d retries=%d networkRetries=%d statusRetries=%d backoffMs=%d durationMs=%d status=%d",
+		record.Event,
+		record.ActionCount,
+		record.Attempts,
+		record.RetryCount,
+		record.NetworkRetryCount,
+		record.StatusRetryCount,
+		record.BackoffMillis,
+		record.DurationMillis,
+		record.LastHTTPStatus,
+	)
+	if execErr != nil {
+		msg = fmt.Sprintf("%s error=%v", msg, execErr)
+	}
+
+	e.Recorder.Event(ra, eventType, reason, msg)
 }
 
 func (e *K8sExecutor) resolveHeaders(
@@ -239,7 +341,7 @@ func setCondition(
 	for i, existing := range ra.Status.Conditions {
 		if existing.Type == cond.Type {
 
-			// Nur Transition-Zeit ändern, wenn sich Status ändert
+			// Update transition time only when status changes.
 			if existing.Status != cond.Status {
 				cond.LastTransitionTime = now
 			} else {
@@ -251,6 +353,6 @@ func setCondition(
 		}
 	}
 
-	// Neue Condition
+	// Append new condition.
 	ra.Status.Conditions = append(ra.Status.Conditions, cond)
 }

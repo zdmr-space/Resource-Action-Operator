@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ra-nginx-tls-conf
+  namespace: ra-demo
+data:
+  nginx.conf: |
+    events {}
+    http {
+      server {
+        listen 8443 ssl;
+
+        ssl_certificate /etc/nginx/tls/tls.crt;
+        ssl_certificate_key /etc/nginx/tls/tls.key;
+
+        access_log /var/log/nginx/access.log;
+
+        location /hook {
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_set_header X-Request-Id $request_id;
+          proxy_set_header Host $host;
+          proxy_pass http://ra-echo.ra-demo.svc.cluster.local/;
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ra-nginx-tls
+  namespace: ra-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ra-nginx-tls
+  template:
+    metadata:
+      labels:
+        app: ra-nginx-tls
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 8443
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: tls
+              mountPath: /etc/nginx/tls
+              readOnly: true
+      volumes:
+        - name: conf
+          configMap:
+            name: ra-nginx-tls-conf
+        - name: tls
+          secret:
+            secretName: ra-nginx-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ra-nginx-tls
+  namespace: ra-demo
+spec:
+  selector:
+    app: ra-nginx-tls
+  ports:
+    - name: https
+      port: 8443
+      targetPort: 8443

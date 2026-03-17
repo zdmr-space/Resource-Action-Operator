@@ -1,0 +1,117 @@
+= Quickstart
+:page-title: Quickstart
+
+== Requirements
+
+- Go 1.24+
+- Docker
+- kubectl
+- Helm 3.15+
+- kind
+
+For full Helm reference, see xref:helm.adoc[Helm Deployment].
+
+== Run Local Tests
+
+[source,bash]
+----
+make test
+----
+
+== Apply Example ResourceActions
+
+HTTP/HTTPS example:
+
+[source,bash]
+----
+kubectl apply -f template-files/resourceaction-default.yaml
+----
+
+Job action example:
+
+[source,bash]
+----
+kubectl apply -f template-files/resourceaction-job-bash.yaml
+----
+
+== Run Operator Locally
+
+[source,bash]
+----
+make run
+----
+
+== Deploy To Cluster (Helm)
+
+[source,bash]
+----
+make helm-install
+----
+
+Enable admission webhook with cert-manager:
+
+[source,bash]
+----
+make helm-install-webhook
+----
+
+Render manifests before install:
+
+[source,bash]
+----
+make helm-template
+----
+
+Validate chart:
+
+[source,bash]
+----
+make helm-lint
+----
+
+Uninstall:
+
+[source,bash]
+----
+make helm-uninstall
+----
+
+Use a custom image:
+
+[source,bash]
+----
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  --set image.repository=<repo/image> \
+  --set image.tag=<tag> \
+  --set image.pullPolicy=IfNotPresent
+----
+
+== Deploy To Cluster (Kustomize, optional)
+
+[source,bash]
+----
+make deploy IMG=<image>
+----
+
+Deploy with admission webhook and cert-manager:
+
+[source,bash]
+----
+make deploy-webhook IMG=<image>
+----
+
+Notes:
+
+- `make deploy` does not require cert-manager.
+- `make deploy-webhook` requires cert-manager installed in the cluster.
+- `make helm-install` does not require cert-manager.
+- `make helm-install-webhook` requires cert-manager installed in the cluster.
+
+Helm values relevant for deployment mode:
+
+- `webhook.enabled=false` by default
+- `webhook.certManager.enabled=false` by default
+- enable webhook mode with `webhook.enabled=true`
+- enable cert-manager resources with `webhook.certManager.enabled=true`

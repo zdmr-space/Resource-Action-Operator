@@ -26,9 +26,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	opsv1alpha1 "de.yusaozdemir.resource-action-operator/api/v1alpha1"
 )
+
+type noopEnsurer struct{}
+
+func (n *noopEnsurer) EnsureWatching(_ context.Context, _ schema.GroupVersionKind) error {
+	return nil
+}
 
 var _ = Describe("ResourceAction Controller", func() {
 	Context("When reconciling a resource", func() {
@@ -51,7 +58,21 @@ var _ = Describe("ResourceAction Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: opsv1alpha1.ResourceActionSpec{
+						Selector: opsv1alpha1.ResourceSelector{
+							Group:   "",
+							Version: "v1",
+							Kind:    "Namespace",
+						},
+						Events: []string{"Create"},
+						Actions: []opsv1alpha1.ActionSpec{
+							{
+								Type: "http",
+								Mode: "once",
+								URL:  "https://example.invalid",
+							},
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -71,6 +92,7 @@ var _ = Describe("ResourceAction Controller", func() {
 			controllerReconciler := &ResourceActionReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
+				Engine: &noopEnsurer{},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -79,6 +101,71 @@ var _ = Describe("ResourceAction Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
+		})
+
+		It("should return an error when engine is not configured", func() {
+			controllerReconciler := &ResourceActionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("engine is not configured"))
+		})
+
+		It("should set SpecValid=False for invalid spec and not fail reconcile", func() {
+			invalidName := "invalid-resourceaction"
+			invalidKey := types.NamespacedName{Name: invalidName, Namespace: "default"}
+			invalid := &opsv1alpha1.ResourceAction{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      invalidName,
+					Namespace: "default",
+				},
+				Spec: opsv1alpha1.ResourceActionSpec{
+					Selector: opsv1alpha1.ResourceSelector{
+						Group:   "",
+						Version: "v1",
+						Kind:    "Namespace",
+					},
+					Events: []string{"Create"},
+					Actions: []opsv1alpha1.ActionSpec{
+						{
+							Type: "http",
+							URL:  "://broken-url",
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, invalid)).To(Succeed())
+			defer func() {
+				_ = k8sClient.Delete(ctx, invalid)
+			}()
+
+			controllerReconciler := &ResourceActionReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Engine: &noopEnsurer{},
+			}
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: invalidKey,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			var got opsv1alpha1.ResourceAction
+			Expect(k8sClient.Get(ctx, invalidKey, &got)).To(Succeed())
+			var specValid *metav1.Condition
+			for i := range got.Status.Conditions {
+				if got.Status.Conditions[i].Type == "SpecValid" {
+					specValid = &got.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(specValid).NotTo(BeNil())
+			Expect(specValid.Status).To(Equal(metav1.ConditionFalse))
+			Expect(specValid.Reason).To(Equal("ValidationFailed"))
 		})
 	})
 })

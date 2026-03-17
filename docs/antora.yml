@@ -1,0 +1,5 @@
+name: resource-action-operator
+title: Resource Action Operator
+version: ~
+nav:
+  - modules/ROOT/nav.adoc
