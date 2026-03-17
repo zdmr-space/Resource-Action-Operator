@@ -119,7 +119,7 @@ helm upgrade --install resource-action-operator charts/resource-action-operator 
   --create-namespace \
   --set image.registry=registry.example.com \
   --set image.repository=platform/resource-action-operator \
-  --set image.tag=0.2.0
+  --set image.tag=0.2.0-rc1
 ```
 
 Deploy a `ResourceAction` job via the dedicated Helm chart:
@@ -148,7 +148,7 @@ Release workflow outputs:
 - published Helm chart repository via GitHub Pages
 - packaged releases for `resource-action-operator` and `resource-action-job`
 
-Create a release by pushing a tag such as `v0.2.0`.
+Create a release by pushing a tag such as `v0.2.0-rc1` or `v0.2.0`.
 
 For a manual test publish from a branch, run the `Release` workflow via `workflow_dispatch` and provide:
 
@@ -160,7 +160,7 @@ For a manual test publish from a branch, run the `Release` workflow via `workflo
 
 Recommended order on a real cluster:
 
-1. Push the repository changes and create a tag such as `v0.2.0`.
+1. Push the repository changes and create a tag such as `v0.2.0-rc1`.
 2. Wait for the `Release` workflow to publish the image and charts.
 3. Install the operator chart from the published repository.
 4. Verify the operator Pod is running:

@@ -3,7 +3,7 @@ replicaCount: 2
 image:
   registry: registry.example.com
   repository: platform/resource-action-operator
-  tag: 0.2.0
+  tag: 0.2.0-rc1
   pullPolicy: IfNotPresent
 
 imagePullSecrets:

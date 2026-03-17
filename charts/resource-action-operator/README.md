@@ -29,7 +29,7 @@ helm upgrade --install resource-action-operator charts/resource-action-operator 
   --create-namespace \
   --set image.registry=registry.example.com \
   --set image.repository=platform/resource-action-operator \
-  --set image.tag=0.2.0
+  --set image.tag=0.2.0-rc1
 ```
 
 ## Operator image by digest

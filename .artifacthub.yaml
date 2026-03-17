@@ -1,4 +1,4 @@
-version: 0.2.0
+version: 0.2.0-rc1
 name: resource-action-operator
 displayName: Resource Action Operator
 description: |

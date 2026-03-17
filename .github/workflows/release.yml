@@ -37,6 +37,7 @@ jobs:
       publish_image: ${{ steps.vars.outputs.publish_image }}
       publish_charts: ${{ steps.vars.outputs.publish_charts }}
       is_tag_release: ${{ steps.vars.outputs.is_tag_release }}
+      is_prerelease: ${{ steps.vars.outputs.is_prerelease }}
     steps:
       - name: Resolve workflow variables
         id: vars
@@ -59,10 +60,17 @@ jobs:
             exit 1
           fi
 
+          if [[ "${VERSION}" == *-* ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "publish_image=${PUBLISH_IMAGE}" >> "${GITHUB_OUTPUT}"
           echo "publish_charts=${PUBLISH_CHARTS}" >> "${GITHUB_OUTPUT}"
           echo "is_tag_release=${IS_TAG_RELEASE}" >> "${GITHUB_OUTPUT}"
+          echo "is_prerelease=${IS_PRERELEASE}" >> "${GITHUB_OUTPUT}"
 
   verify:
     name: Verify Release
@@ -179,3 +187,29 @@ jobs:
           skip_existing: true
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+  github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - verify
+      - publish-image
+      - publish-charts
+    if: needs.prepare.outputs.is_tag_release == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
+          generate_release_notes: true
+          body: |
+            Release version: `${{ needs.prepare.outputs.version }}`
+
+            Published artifacts:
+            - Operator image: `ghcr.io/zdmr-space/resource-action-operator:${{ needs.prepare.outputs.version }}`
+            - Helm chart repository: `https://zdmr-space.github.io/Resource-Action-Operator`
