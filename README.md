@@ -150,6 +150,12 @@ Release workflow outputs:
 
 Create a release by pushing a tag such as `v0.2.0`.
 
+For a manual test publish from a branch, run the `Release` workflow via `workflow_dispatch` and provide:
+
+- `version`, for example `0.2.0-rc1`
+- `publish_image=true`
+- `publish_charts=true`
+
 ## Real Cluster Test
 
 Recommended order on a real cluster:

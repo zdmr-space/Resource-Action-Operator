@@ -5,6 +5,21 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without leading v, e.g. 0.2.0-rc1"
+        required: true
+        type: string
+      publish_image:
+        description: "Publish the operator image to GHCR"
+        required: true
+        default: true
+        type: boolean
+      publish_charts:
+        description: "Publish Helm charts to GitHub Pages releases"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -14,9 +29,45 @@ env:
   REGISTRY_IMAGE: ghcr.io/zdmr-space/resource-action-operator
 
 jobs:
+  prepare:
+    name: Resolve Release Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      publish_image: ${{ steps.vars.outputs.publish_image }}
+      publish_charts: ${{ steps.vars.outputs.publish_charts }}
+      is_tag_release: ${{ steps.vars.outputs.is_tag_release }}
+    steps:
+      - name: Resolve workflow variables
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            PUBLISH_IMAGE=true
+            PUBLISH_CHARTS=true
+            IS_TAG_RELEASE=true
+          else
+            VERSION="${{ inputs.version }}"
+            PUBLISH_IMAGE="${{ inputs.publish_image }}"
+            PUBLISH_CHARTS="${{ inputs.publish_charts }}"
+            IS_TAG_RELEASE=false
+          fi
+
+          if [[ -z "${VERSION}" ]]; then
+            echo "Version must not be empty" >&2
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "publish_image=${PUBLISH_IMAGE}" >> "${GITHUB_OUTPUT}"
+          echo "publish_charts=${PUBLISH_CHARTS}" >> "${GITHUB_OUTPUT}"
+          echo "is_tag_release=${IS_TAG_RELEASE}" >> "${GITHUB_OUTPUT}"
+
   verify:
     name: Verify Release
     runs-on: ubuntu-latest
+    needs: prepare
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,7 +96,7 @@ jobs:
           helm template resource-action-operator charts/resource-action-operator \
             --set image.registry=ghcr.io \
             --set image.repository=zdmr-space/resource-action-operator \
-            --set image.tag=${GITHUB_REF_NAME#v} > /tmp/operator-chart.yaml
+            --set image.tag=${{ needs.prepare.outputs.version }} > /tmp/operator-chart.yaml
 
       - name: Render job chart
         run: |
@@ -57,7 +108,10 @@ jobs:
   publish-image:
     name: Publish Operator Image
     runs-on: ubuntu-latest
-    needs: verify
+    needs:
+      - prepare
+      - verify
+    if: needs.prepare.outputs.publish_image == 'true'
     permissions:
       contents: read
       packages: write
@@ -84,10 +138,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ needs.prepare.outputs.version }}
             type=sha
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.is_tag_release == 'true' }}
 
       - name: Build and push image
         uses: docker/build-push-action@v6
@@ -102,7 +155,10 @@ jobs:
   publish-charts:
     name: Publish Helm Charts
     runs-on: ubuntu-latest
-    needs: verify
+    needs:
+      - prepare
+      - verify
+    if: needs.prepare.outputs.publish_charts == 'true'
     permissions:
       contents: write
     steps:
