@@ -335,9 +335,9 @@ func backoffSleep(rng *rand.Rand, base, max time.Duration, attempt int) time.Dur
 }
 
 func isRetryableNetErr(err error) bool {
-	// very pragmatic: timeout / temporary / connection resets
+	// very pragmatic: timeout / connection resets
 	if nerr, ok := err.(net.Error); ok {
-		if nerr.Timeout() || nerr.Temporary() {
+		if nerr.Timeout() {
 			return true
 		}
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -36,10 +35,9 @@ type Executor interface {
 }
 
 type Engine struct {
-	cfg    *rest.Config
-	dyn    dynamic.Interface
-	disco  discovery.DiscoveryInterface
-	mapper meta.RESTMapper
+	cfg   *rest.Config
+	dyn   dynamic.Interface
+	disco discovery.DiscoveryInterface
 
 	factory dynamicinformer.DynamicSharedInformerFactory
 
@@ -106,7 +104,7 @@ func (e *Engine) ResolveGVR(gvk schema.GroupVersionKind) (schema.GroupVersionRes
 
 // EnsureWatching makes sure an informer for this resource is running.
 func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind) error {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	gvr, err := e.ResolveGVR(gvk)
 	if err != nil {
@@ -122,7 +120,7 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 
 	inf := e.factory.ForResource(gvr).Informer()
 
-	inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
@@ -165,10 +163,12 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 				Obj:   u,
 			})
 		},
-	})
+	}); err != nil {
+		return fmt.Errorf("add event handler for %s: %w", gvr.String(), err)
+	}
 
 	e.informers[gvr] = inf
-	log.Info("Started watching resource", "gvk", gvk.String(), "gvr", gvr.String())
+	logger.Info("Started watching resource", "gvk", gvk.String(), "gvr", gvr.String())
 
 	// Start factory once.
 	if !e.started {

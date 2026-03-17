@@ -102,6 +102,28 @@ func validateJobAction(i int, action ActionSpec) error {
 	if strings.TrimSpace(job.Image) == "" {
 		return fmt.Errorf("actions[%d].job.image is required", i)
 	}
+	if err := validateJobExecution(i, job); err != nil {
+		return err
+	}
+	if err := validateJobEnv(i, job); err != nil {
+		return err
+	}
+	volumesByName, err := validateJobVolumes(i, job)
+	if err != nil {
+		return err
+	}
+	if err := validateJobVolumeMounts(i, job, volumesByName); err != nil {
+		return err
+	}
+	if job.Timeout != "" {
+		if _, parseErr := time.ParseDuration(job.Timeout); parseErr != nil {
+			return fmt.Errorf("actions[%d].job.timeout invalid duration: %w", i, parseErr)
+		}
+	}
+	return nil
+}
+
+func validateJobExecution(i int, job *JobSpec) error {
 	hasScript := strings.TrimSpace(job.Script) != ""
 	hasCommand := len(job.Command) > 0
 	if hasScript == hasCommand {
@@ -110,24 +132,17 @@ func validateJobAction(i int, action ActionSpec) error {
 	if hasScript && len(job.Args) > 0 {
 		return fmt.Errorf("actions[%d].job.args is not supported when script is set", i)
 	}
-	if hasScript && len(job.InterpreterCommand) == 1 && strings.TrimSpace(job.InterpreterCommand[0]) == "" {
-		return fmt.Errorf("actions[%d].job.interpreterCommand must not contain empty values", i)
+	return validateNonEmptyStrings(i, "job.command", job.Command)
+}
+
+func validateJobEnv(i int, job *JobSpec) error {
+	if err := validateNonEmptyStrings(i, "job.args", job.Args); err != nil {
+		return err
 	}
-	for j, cmd := range job.Command {
-		if strings.TrimSpace(cmd) == "" {
-			return fmt.Errorf("actions[%d].job.command[%d] must not be empty", i, j)
-		}
+	if err := validateNonEmptyStrings(i, "job.interpreterCommand", job.InterpreterCommand); err != nil {
+		return err
 	}
-	for j, arg := range job.Args {
-		if strings.TrimSpace(arg) == "" {
-			return fmt.Errorf("actions[%d].job.args[%d] must not be empty", i, j)
-		}
-	}
-	for j, item := range job.InterpreterCommand {
-		if strings.TrimSpace(item) == "" {
-			return fmt.Errorf("actions[%d].job.interpreterCommand[%d] must not be empty", i, j)
-		}
-	}
+
 	for j, env := range job.Env {
 		if strings.TrimSpace(env.Name) == "" {
 			return fmt.Errorf("actions[%d].job.env[%d].name is required", i, j)
@@ -141,27 +156,37 @@ func validateJobAction(i int, action ActionSpec) error {
 			return fmt.Errorf("actions[%d].job.env[%d].valueFrom.secretKeyRef is required", i, j)
 		}
 	}
+
+	return nil
+}
+
+func validateJobVolumes(i int, job *JobSpec) (map[string]struct{}, error) {
 	volumesByName := make(map[string]struct{}, len(job.Volumes))
 	for j, vol := range job.Volumes {
 		if strings.TrimSpace(vol.Name) == "" {
-			return fmt.Errorf("actions[%d].job.volumes[%d].name is required", i, j)
+			return nil, fmt.Errorf("actions[%d].job.volumes[%d].name is required", i, j)
 		}
 		if _, exists := volumesByName[vol.Name]; exists {
-			return fmt.Errorf("actions[%d].job.volumes[%d].name %q is duplicated", i, j, vol.Name)
+			return nil, fmt.Errorf("actions[%d].job.volumes[%d].name %q is duplicated", i, j, vol.Name)
 		}
 		volumesByName[vol.Name] = struct{}{}
 		hasSecret := vol.Secret != nil
 		hasConfigMap := vol.ConfigMap != nil
 		if hasSecret == hasConfigMap {
-			return fmt.Errorf("actions[%d].job.volumes[%d] must define exactly one of secret or configMap", i, j)
+			return nil, fmt.Errorf("actions[%d].job.volumes[%d] must define exactly one of secret or configMap", i, j)
 		}
 		if hasSecret && strings.TrimSpace(vol.Secret.SecretName) == "" {
-			return fmt.Errorf("actions[%d].job.volumes[%d].secret.secretName is required", i, j)
+			return nil, fmt.Errorf("actions[%d].job.volumes[%d].secret.secretName is required", i, j)
 		}
 		if hasConfigMap && strings.TrimSpace(vol.ConfigMap.Name) == "" {
-			return fmt.Errorf("actions[%d].job.volumes[%d].configMap.name is required", i, j)
+			return nil, fmt.Errorf("actions[%d].job.volumes[%d].configMap.name is required", i, j)
 		}
 	}
+
+	return volumesByName, nil
+}
+
+func validateJobVolumeMounts(i int, job *JobSpec, volumesByName map[string]struct{}) error {
 	for j, mount := range job.VolumeMounts {
 		if strings.TrimSpace(mount.Name) == "" {
 			return fmt.Errorf("actions[%d].job.volumeMounts[%d].name is required", i, j)
@@ -173,11 +198,17 @@ func validateJobAction(i int, action ActionSpec) error {
 			return fmt.Errorf("actions[%d].job.volumeMounts[%d].name %q does not reference a defined volume", i, j, mount.Name)
 		}
 	}
-	if job.Timeout != "" {
-		if _, err := time.ParseDuration(job.Timeout); err != nil {
-			return fmt.Errorf("actions[%d].job.timeout invalid duration: %w", i, err)
+
+	return nil
+}
+
+func validateNonEmptyStrings(i int, field string, values []string) error {
+	for j, value := range values {
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("actions[%d].%s[%d] must not be empty", i, field, j)
 		}
 	}
+
 	return nil
 }
 

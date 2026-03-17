@@ -11,6 +11,7 @@ spec:
         args:
         - --leader-elect
         - --health-probe-bind-address=:8081
+        - --enable-webhook
         - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
         volumeMounts:
         - mountPath: /tmp/k8s-webhook-server/serving-certs

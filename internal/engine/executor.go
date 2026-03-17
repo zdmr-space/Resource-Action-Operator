@@ -85,39 +85,18 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 				"name", input.Obj.GetName(),
 			)
 
-			switch action.Type {
-			case "http":
-				headersResolved, err := e.resolveHeaders(ctx, action.Headers, ra.Namespace)
-				if err != nil {
-					execErr = err
-					break
-				}
-
-				metrics, err := httpExec.ExecuteWithMetrics(ctx, action, ra.Namespace, input.Obj, headersResolved)
-				totalAttempts += metrics.Attempts
-				totalNetworkRetries += metrics.NetworkRetryCount
-				totalStatusRetries += metrics.StatusRetryCount
-				totalBackoffMillis += metrics.BackoffMillis
-				totalDurationMillis += metrics.DurationMillis
-				if metrics.StatusCode > 0 {
-					lastHTTPStatus = metrics.StatusCode
-				}
-				executedActions++
-				if err != nil {
-					execErr = err
-					break
-				}
-			case "job":
-				jobMetrics, err := jobExec.Execute(ctx, ra, i, action, input)
-				totalAttempts += jobMetrics.Attempts
-				totalDurationMillis += jobMetrics.DurationMillis
-				executedActions++
-				if err != nil {
-					execErr = err
-					break
-				}
-			default:
-				execErr = fmt.Errorf("unsupported action type %q", action.Type)
+			actionMetrics, err := e.executeAction(ctx, ra, i, action, input, httpExec, jobExec)
+			totalAttempts += actionMetrics.Attempts
+			totalNetworkRetries += actionMetrics.NetworkRetryCount
+			totalStatusRetries += actionMetrics.StatusRetryCount
+			totalBackoffMillis += actionMetrics.BackoffMillis
+			totalDurationMillis += actionMetrics.DurationMillis
+			if actionMetrics.StatusCode > 0 {
+				lastHTTPStatus = actionMetrics.StatusCode
+			}
+			executedActions++
+			if err != nil {
+				execErr = err
 				break
 			}
 		}
@@ -126,7 +105,7 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 		}
 
 		// ---- Status Update (CONFLICT-SAFE) ----
-		record := opsv1alpha1.ExecutionRecord{
+		execRecord := opsv1alpha1.ExecutionRecord{
 			ResourceUID:       string(input.Obj.GetUID()),
 			Event:             string(input.Event),
 			ExecutedAt:        metav1.Now(),
@@ -149,7 +128,7 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 				return err
 			}
 
-			latest.Status.Executions = append(latest.Status.Executions, record)
+			latest.Status.Executions = append(latest.Status.Executions, execRecord)
 
 			if execErr != nil {
 				latest.Status.LastError = execErr.Error()
@@ -187,7 +166,7 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 				DurationMillis:    totalDurationMillis,
 				LastHTTPStatus:    lastHTTPStatus,
 			})
-			e.emitEvent(&ra, corev1.EventTypeWarning, "ActionFailed", record, execErr)
+			e.emitEvent(&ra, corev1.EventTypeWarning, "ActionFailed", execRecord, execErr)
 			return execErr
 		}
 
@@ -202,17 +181,45 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 				LastHTTPStatus:    lastHTTPStatus,
 			})
 		}
-		e.emitEvent(&ra, corev1.EventTypeNormal, "ActionSucceeded", record, nil)
+		e.emitEvent(&ra, corev1.EventTypeNormal, "ActionSucceeded", execRecord, nil)
 	}
 
 	return nil
+}
+
+func (e *K8sExecutor) executeAction(
+	ctx context.Context,
+	ra opsv1alpha1.ResourceAction,
+	actionIndex int,
+	action opsv1alpha1.ActionSpec,
+	input MatchInput,
+	httpExec *HTTPExecutor,
+	jobExec *JobExecutor,
+) (HTTPExecutionMetrics, error) {
+	switch action.Type {
+	case "http":
+		headersResolved, err := e.resolveHeaders(ctx, action.Headers, ra.Namespace)
+		if err != nil {
+			return HTTPExecutionMetrics{}, err
+		}
+
+		return httpExec.ExecuteWithMetrics(ctx, action, ra.Namespace, input.Obj, headersResolved)
+	case "job":
+		jobMetrics, err := jobExec.Execute(ctx, ra, actionIndex, action, input)
+		return HTTPExecutionMetrics{
+			Attempts:       jobMetrics.Attempts,
+			DurationMillis: jobMetrics.DurationMillis,
+		}, err
+	default:
+		return HTTPExecutionMetrics{}, fmt.Errorf("unsupported action type %q", action.Type)
+	}
 }
 
 func (e *K8sExecutor) emitEvent(
 	ra *opsv1alpha1.ResourceAction,
 	eventType string,
 	reason string,
-	record opsv1alpha1.ExecutionRecord,
+	execRecord opsv1alpha1.ExecutionRecord,
 	execErr error,
 ) {
 	if e.Recorder == nil {
@@ -221,15 +228,15 @@ func (e *K8sExecutor) emitEvent(
 
 	msg := fmt.Sprintf(
 		"event=%s actions=%d attempts=%d retries=%d networkRetries=%d statusRetries=%d backoffMs=%d durationMs=%d status=%d",
-		record.Event,
-		record.ActionCount,
-		record.Attempts,
-		record.RetryCount,
-		record.NetworkRetryCount,
-		record.StatusRetryCount,
-		record.BackoffMillis,
-		record.DurationMillis,
-		record.LastHTTPStatus,
+		execRecord.Event,
+		execRecord.ActionCount,
+		execRecord.Attempts,
+		execRecord.RetryCount,
+		execRecord.NetworkRetryCount,
+		execRecord.StatusRetryCount,
+		execRecord.BackoffMillis,
+		execRecord.DurationMillis,
+		execRecord.LastHTTPStatus,
 	)
 	if execErr != nil {
 		msg = fmt.Sprintf("%s error=%v", msg, execErr)

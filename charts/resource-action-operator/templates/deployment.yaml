@@ -41,7 +41,8 @@ spec:
             {{- if .Values.leaderElection }}
             - --leader-elect
             {{- end }}
-            {{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+            {{- if .Values.webhook.enabled }}
+            - --enable-webhook
             - --webhook-cert-path={{ .Values.webhook.certMountPath }}
             {{- end }}
           securityContext:
@@ -62,13 +63,13 @@ spec:
             periodSeconds: 10
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-          {{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+          {{- if .Values.webhook.enabled }}
           volumeMounts:
             - name: webhook-certs
               mountPath: {{ .Values.webhook.certMountPath }}
               readOnly: true
           {{- end }}
-      {{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+      {{- if .Values.webhook.enabled }}
       volumes:
         - name: webhook-certs
           secret:
