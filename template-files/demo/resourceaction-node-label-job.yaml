@@ -1,0 +1,30 @@
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: node-label-job
+  namespace: default
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Node
+  events:
+    - Update
+  filters:
+    labels:
+      demo.resource-action-operator/enabled: "true"
+  actions:
+    - type: job
+      mode: once
+      job:
+        image: bash:5.2
+        allowRunAsRoot: true
+        interpreterCommand:
+          - /bin/bash
+          - -c
+        script: |
+          echo "node label matched"
+          echo "node update event received"
+          date
+        timeout: 30s
+        ttlSecondsAfterFinished: 300

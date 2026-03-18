@@ -166,6 +166,24 @@ A TLS-oriented HTTP example for `Deployment` events.
 
 Use it as a reference for HTTPS-related configuration such as custom CA handling or relaxed verification during testing.
 
+### `demo/operator-node-watch-rbac.yaml`
+
+Grants the operator the extra cluster-scoped permissions needed for Node-based demos.
+
+Apply this before testing `Node`-triggered actions.
+
+### `demo/resourceaction-node-label-http.yaml`
+
+Creates a `ResourceAction` that reacts to `Node` update events and matches Nodes that currently have the label `demo.resource-action-operator/enabled=true`.
+
+It sends an HTTP request to the in-cluster NGINX sink.
+
+### `demo/resourceaction-node-label-job.yaml`
+
+Creates a `ResourceAction` that reacts to `Node` update events and matches Nodes that currently have the label `demo.resource-action-operator/enabled=true`.
+
+It launches a Kubernetes Job and is useful for testing label-based Job execution on cluster-scoped resources.
+
 ## Typical Usage
 
 Apply a simple standalone example:
@@ -195,6 +213,23 @@ kubectl apply -f template-files/demo/resourceaction-namespace-job-bash.yaml
 kubectl apply -f template-files/demo/trigger-namespace-job.yaml
 ```
 
+Run the node-label-to-HTTP demo in the correct order:
+
+```bash
+kubectl apply -f template-files/demo/namespace-http-sink.yaml
+kubectl apply -f template-files/demo/operator-node-watch-rbac.yaml
+kubectl apply -f template-files/demo/resourceaction-node-label-http.yaml
+kubectl label node <node-name> demo.resource-action-operator/enabled=true --overwrite
+```
+
+Run the node-label-to-job demo in the correct order:
+
+```bash
+kubectl apply -f template-files/demo/operator-node-watch-rbac.yaml
+kubectl apply -f template-files/demo/resourceaction-node-label-job.yaml
+kubectl label node <node-name> demo.resource-action-operator/enabled=true --overwrite
+```
+
 Inspect the result:
 
 ```bash
@@ -215,3 +250,4 @@ kubectl logs -n demo-http-sink deploy/ra-http-sink
 - Some examples use public test endpoints such as `httpbin.org`. Replace them for internal or production use.
 - Job examples may require an existing service account such as `restricted-runner`.
 - Demo manifests are intentionally simple and optimized for validation, not for hardened production deployment.
+- For `Node`-based demos, make sure the operator has cluster-scoped watch permissions for `nodes`.

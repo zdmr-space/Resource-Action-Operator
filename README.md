@@ -270,6 +270,43 @@ spec:
         timeout: 30s
 ```
 
+## Label-Based Matching
+
+Matching on the current label set of a resource is already supported through `filters.labels`.
+
+This works for namespaced and cluster-scoped resources, for example:
+
+- `Deployment`
+- `Service`
+- `Namespace`
+- `Node`
+
+Example for a `Node` that should trigger on `Update` when it currently has a specific label:
+
+```yaml
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: node-label-http-hook
+  namespace: default
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Node
+  events:
+    - Update
+  filters:
+    labels:
+      demo.resource-action-operator/enabled: "true"
+  actions:
+    - type: http
+      method: POST
+      url: https://example.internal/hook
+```
+
+For cluster-scoped resources such as `Node`, the operator ServiceAccount needs additional RBAC permissions to watch that resource type.
+
 ## Security Model
 
 - Job actions run as Kubernetes Jobs, not as local processes inside the operator container.
