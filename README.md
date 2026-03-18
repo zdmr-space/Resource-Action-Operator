@@ -278,6 +278,13 @@ spec:
 - Additional Kubernetes API permissions should be granted only through explicitly created ServiceAccounts and RoleBindings.
 - HTTP auth tokens, API keys, and certificates should be stored in Kubernetes Secrets and referenced from the `ResourceAction`.
 
+## Roadmap
+
+Planned for a follow-up release:
+
+- label-change based triggers for `Update` events, for example when a resource receives a specific label and this transition should trigger an HTTP action or Job action
+- richer update-aware filters that can evaluate old versus new label state instead of only matching the current label set
+
 ## Development
 
 ```bash
