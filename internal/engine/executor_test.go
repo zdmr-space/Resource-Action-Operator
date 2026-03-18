@@ -143,6 +143,7 @@ func TestExecute_ScheduleModeAction_DoesNotWriteStatus(t *testing.T) {
 }
 
 func TestExecute_JobAction_CreatesBatchJob(t *testing.T) {
+	allowRunAsRoot := true
 	ra := &opsv1alpha1.ResourceAction{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "ra-job",
@@ -162,6 +163,7 @@ func TestExecute_JobAction_CreatesBatchJob(t *testing.T) {
 						Image:              "bash:5.2",
 						Script:             "echo hello",
 						InterpreterCommand: []string{"/bin/bash", "-c"},
+						AllowRunAsRoot:     &allowRunAsRoot,
 						Volumes: []opsv1alpha1.JobVolume{
 							{
 								Name: "tls",
@@ -227,6 +229,9 @@ func TestExecute_JobAction_CreatesBatchJob(t *testing.T) {
 	}
 	if len(container.Args) != 1 || container.Args[0] != "echo hello" {
 		t.Fatalf("unexpected args: %#v", container.Args)
+	}
+	if container.SecurityContext == nil || container.SecurityContext.RunAsNonRoot == nil || *container.SecurityContext.RunAsNonRoot {
+		t.Fatalf("expected runAsNonRoot=false when allowRunAsRoot=true")
 	}
 	if len(job.Spec.Template.Spec.Volumes) != 2 {
 		t.Fatalf("expected 2 volumes, got %d", len(job.Spec.Template.Spec.Volumes))

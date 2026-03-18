@@ -74,6 +74,109 @@ spec:
                       - once
                       - cron
                       type: string
+                    job:
+                      properties:
+                        args:
+                          items:
+                            type: string
+                          type: array
+                        automountServiceAccountToken:
+                          default: false
+                          type: boolean
+                        allowRunAsRoot:
+                          default: false
+                          type: boolean
+                        backoffLimit:
+                          format: int32
+                          type: integer
+                        command:
+                          items:
+                            type: string
+                          type: array
+                        env:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                              valueFrom:
+                                properties:
+                                  secretKeyRef:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        type: string
+                                    required:
+                                    - key
+                                    - name
+                                    type: object
+                                type: object
+                            required:
+                            - name
+                            type: object
+                          type: array
+                        image:
+                          type: string
+                        interpreterCommand:
+                          items:
+                            type: string
+                          type: array
+                        resources:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        script:
+                          type: string
+                        serviceAccountName:
+                          type: string
+                        timeout:
+                          default: 30s
+                          type: string
+                        ttlSecondsAfterFinished:
+                          format: int32
+                          type: integer
+                        volumeMounts:
+                          items:
+                            properties:
+                              mountPath:
+                                type: string
+                              name:
+                                type: string
+                              readOnly:
+                                default: true
+                                type: boolean
+                            required:
+                            - mountPath
+                            - name
+                            type: object
+                          type: array
+                        volumes:
+                          items:
+                            properties:
+                              configMap:
+                                properties:
+                                  name:
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              name:
+                                type: string
+                              secret:
+                                properties:
+                                  secretName:
+                                    type: string
+                                required:
+                                - secretName
+                                type: object
+                            required:
+                            - name
+                            type: object
+                          type: array
+                      required:
+                      - image
+                      type: object
                     retry:
                       properties:
                         backoff:
@@ -148,6 +251,7 @@ spec:
                     type:
                       enum:
                       - http
+                      - job
                       type: string
                     url:
                       type: string

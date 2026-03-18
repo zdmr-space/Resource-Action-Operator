@@ -70,6 +70,7 @@ func TestValidateResourceActionSpec_CronRequiresDuration(t *testing.T) {
 }
 
 func TestValidateResourceActionSpec_ValidJobAction(t *testing.T) {
+	allowRunAsRoot := true
 	spec := ResourceActionSpec{
 		Selector: ResourceSelector{
 			Group:   "apps",
@@ -84,6 +85,7 @@ func TestValidateResourceActionSpec_ValidJobAction(t *testing.T) {
 					Image:              "bash:5.2",
 					Script:             "echo hello",
 					InterpreterCommand: []string{"/bin/bash", "-c"},
+					AllowRunAsRoot:     &allowRunAsRoot,
 					Env: []JobEnvVar{
 						{
 							Name:  "STATIC",

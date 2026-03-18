@@ -2,8 +2,8 @@ apiVersion: v2
 name: resource-action-job
 description: Helm chart for creating ResourceAction job actions
 type: application
-version: 0.2.0-rc4
-appVersion: "0.2.0-rc4"
+version: 0.2.0-rc5
+appVersion: "0.2.0-rc5"
 keywords:
   - kubernetes
   - resourceaction

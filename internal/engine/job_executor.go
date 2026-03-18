@@ -132,6 +132,9 @@ func buildJobForAction(
 
 	allowPrivilegeEscalation := false
 	runAsNonRoot := true
+	if job.AllowRunAsRoot != nil && *job.AllowRunAsRoot {
+		runAsNonRoot = false
+	}
 	readOnlyRootFilesystem := false
 	container := corev1.Container{
 		Name:            "runner",

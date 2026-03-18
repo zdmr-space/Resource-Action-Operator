@@ -148,6 +148,9 @@ type JobSpec struct {
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
 	// +kubebuilder:default=false
+	AllowRunAsRoot *bool `json:"allowRunAsRoot,omitempty"`
+
+	// +kubebuilder:default=false
 	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty"`
 
 	// +kubebuilder:default="30s"
