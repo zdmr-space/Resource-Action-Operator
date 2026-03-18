@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version without leading v, e.g. 0.2.0-rc1"
+        description: "Release version without leading v, e.g. 0.2.0-rc3"
         required: true
         type: string
       publish_image:

@@ -26,7 +26,7 @@ jobs:
           helm template resource-action-operator charts/resource-action-operator \
             --set image.registry=ghcr.io \
             --set image.repository=zdmr-space/resource-action-operator \
-            --set image.tag=0.2.0-rc1 > /tmp/operator-chart.yaml
+            --set image.tag=0.2.0-rc3 > /tmp/operator-chart.yaml
 
       - name: Render job chart
         run: |
