@@ -53,6 +53,25 @@ helm upgrade --install resource-action-operator charts/resource-action-operator 
   --set webhook.certManager.enabled=true
 ```
 
+## Optional extra RBAC for watched resources
+
+The operator already gets the default permissions required for:
+
+- `ResourceAction` resources
+- creating `Job` objects
+- emitting `Event` objects
+
+If you want the operator to watch additional cluster-scoped resource types such as `Node`, add extra cluster rules:
+
+```bash
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  --set-json 'rbac.extraClusterRules=[{"apiGroups":[""],"resources":["nodes"],"verbs":["get","list","watch"]}]'
+```
+
+For extra namespaced permissions, use `rbac.extraRules`.
+
 ## Example values file
 
 ```bash
@@ -83,6 +102,8 @@ helm upgrade --install resource-action-operator charts/resource-action-operator 
 | `nodeSelector` | object | `{}` | Node selector for the operator Pod. |
 | `tolerations` | list | `[]` | Tolerations for the operator Pod. |
 | `affinity` | object | `{}` | Affinity rules for the operator Pod. |
+| `rbac.extraClusterRules` | list | `[]` | Additional ClusterRole rules, for example to watch cluster-scoped resources such as `nodes`. |
+| `rbac.extraRules` | list | `[]` | Additional namespaced Role rules in the operator namespace. |
 | `leaderElection` | bool | `true` | Enable controller-runtime leader election. |
 | `healthProbeBindAddress` | string | `":8081"` | Health and readiness probe bind address. |
 | `metrics.enabled` | bool | `true` | Enable the metrics endpoint. |

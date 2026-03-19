@@ -15,18 +15,26 @@ events:
   - Create
 
 filters: {}
-# Examples:
-# filters:
-#   labels:
-#     demo.resource-action-operator/enabled: "true"
-#   labelChanges:
-#     - key: demo.resource-action-operator/enabled
-#       to: "true"
 
-job:
+action:
+  type: http
   mode: once
   schedule: ""
 
+http:
+  method: POST
+  url: https://example.internal/hook
+  headers: {}
+  body:
+    template: |
+      {"name":"{{ .metadata.name }}"}
+  expectedStatus: "^2..$"
+  timeout: 10s
+  retry: {}
+  tls: {}
+  urlPolicy: {}
+
+job:
   image:
     registry: ""
     repository: bash
@@ -42,17 +50,16 @@ job:
 
   command: []
   args: []
-
   env: []
   volumes: []
   volumeMounts: []
-  allowRunAsRoot: false
 
   serviceAccount:
     create: false
     name: ""
     annotations: {}
 
+  allowRunAsRoot: false
   automountServiceAccountToken: false
   timeout: 30s
   logTailLines: 20

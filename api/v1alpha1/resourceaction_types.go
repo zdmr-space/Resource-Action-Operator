@@ -40,9 +40,22 @@ type ResourceSelector struct {
 }
 
 type FilterSpec struct {
-	Labels         map[string]string `json:"labels,omitempty"`
-	NameRegex      string            `json:"nameRegex,omitempty"`
-	NamespaceRegex string            `json:"namespaceRegex,omitempty"`
+	Labels         map[string]string   `json:"labels,omitempty"`
+	LabelChanges   []LabelChangeFilter `json:"labelChanges,omitempty"`
+	NameRegex      string              `json:"nameRegex,omitempty"`
+	NamespaceRegex string              `json:"namespaceRegex,omitempty"`
+}
+
+type LabelChangeFilter struct {
+	Key string `json:"key"`
+
+	// From is the previous value. Use "*" to match any existing previous value.
+	// Leave empty to require the label to be absent before the update.
+	From string `json:"from,omitempty"`
+
+	// To is the new value. Use "*" to match any existing new value.
+	// Leave empty to require the label to be absent after the update.
+	To string `json:"to,omitempty"`
 }
 
 type ActionSpec struct {
@@ -156,6 +169,9 @@ type JobSpec struct {
 	// +kubebuilder:default="30s"
 	Timeout string `json:"timeout,omitempty"`
 
+	// +kubebuilder:default=0
+	LogTailLines *int32 `json:"logTailLines,omitempty"`
+
 	TTLSecondsAfterFinished *int32                       `json:"ttlSecondsAfterFinished,omitempty"`
 	BackoffLimit            *int32                       `json:"backoffLimit,omitempty"`
 	Resources               *corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -236,6 +252,18 @@ type ExecutionRecord struct {
 	BackoffMillis     int64 `json:"backoffMillis,omitempty"`
 	DurationMillis    int64 `json:"durationMillis,omitempty"`
 	LastHTTPStatus    int   `json:"lastHttpStatus,omitempty"`
+	Job               *JobExecutionRecord `json:"job,omitempty"`
+}
+
+type JobExecutionRecord struct {
+	Name        string       `json:"name,omitempty"`
+	Namespace   string       `json:"namespace,omitempty"`
+	PodName     string       `json:"podName,omitempty"`
+	Status      string       `json:"status,omitempty"`
+	ExitCode    *int32       `json:"exitCode,omitempty"`
+	StartedAt   *metav1.Time `json:"startedAt,omitempty"`
+	CompletedAt *metav1.Time `json:"completedAt,omitempty"`
+	LogTail     []string     `json:"logTail,omitempty"`
 }
 
 func init() {

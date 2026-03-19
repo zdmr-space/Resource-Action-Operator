@@ -7,7 +7,14 @@ selector:
   kind: Deployment
 
 events:
-  - Create
+  - Update
+
+filters:
+  labels:
+    demo.resource-action-operator/enabled: "true"
+  labelChanges:
+    - key: demo.resource-action-operator/enabled
+      to: "true"
 
 job:
   image:
@@ -36,7 +43,9 @@ job:
     create: true
     name: restricted-runner
 
+  allowRunAsRoot: false
   automountServiceAccountToken: false
   timeout: 30s
+  logTailLines: 20
   ttlSecondsAfterFinished: 300
   backoffLimit: 0

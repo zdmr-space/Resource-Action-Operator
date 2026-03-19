@@ -66,6 +66,63 @@ helm upgrade --install deployment-job charts/resource-action-job \
   --set job.volumeMounts[1].mountPath=/opt/scripts
 ```
 
+## Label and label transition filters
+
+The chart forwards the `filters` block directly into the `ResourceAction` spec, so listener options such as:
+
+- `labels`
+- `labelChanges`
+- `nameRegex`
+- `namespaceRegex`
+
+are supported.
+
+Example for a Node label transition from absent to `true`:
+
+```bash
+helm upgrade --install node-label-job charts/resource-action-job \
+  --namespace default \
+  --set selector.group= \
+  --set selector.version=v1 \
+  --set selector.kind=Node \
+  --set events[0]=Update \
+  --set filters.labelChanges[0].key=demo.resource-action-operator/enabled \
+  --set-string filters.labelChanges[0].to=true
+```
+
+Example for matching the current label set:
+
+```bash
+helm upgrade --install node-label-job charts/resource-action-job \
+  --namespace default \
+  --set selector.group= \
+  --set selector.version=v1 \
+  --set selector.kind=Node \
+  --set events[0]=Update \
+  --set-string filters.labels.demo\\.resource-action-operator/enabled=true
+```
+
+## Allow root-based runner images
+
+If the selected image runs as root and you explicitly want to allow it:
+
+```bash
+helm upgrade --install deployment-job charts/resource-action-job \
+  --namespace default \
+  --set job.image.repository=bash \
+  --set job.image.tag=5.2 \
+  --set job.allowRunAsRoot=true
+```
+
+## Persist the last job log lines in status
+
+```bash
+helm upgrade --install deployment-job charts/resource-action-job \
+  --namespace default \
+  --set job.logTailLines=20 \
+  --set job.ttlSecondsAfterFinished=300
+```
+
 ## Example values file
 
 ```bash
@@ -87,7 +144,7 @@ helm upgrade --install deployment-job charts/resource-action-job \
 | `selector.version` | string | `"v1"` | Target resource API version. |
 | `selector.kind` | string | `"Deployment"` | Target resource kind. |
 | `events` | list | `["Create"]` | Trigger events for the `ResourceAction`. |
-| `filters` | object | `{}` | Optional selector filters such as labels or regexes. |
+| `filters` | object | `{}` | Optional listener filters such as `labels`, `labelChanges`, `nameRegex`, or `namespaceRegex`. |
 | `job.mode` | string | `"once"` | Job action mode, typically `once` or `cron`. |
 | `job.schedule` | string | `""` | Duration string used when `job.mode` is `cron`. |
 | `job.image.registry` | string | `""` | Optional image registry prefix for the job runner image. |
@@ -101,11 +158,13 @@ helm upgrade --install deployment-job charts/resource-action-job \
 | `job.env` | list | `[]` | Environment variables passed to the job. |
 | `job.volumes` | list | `[]` | Secret or ConfigMap volumes exposed to the job. |
 | `job.volumeMounts` | list | `[]` | Volume mounts for the defined volumes. |
+| `job.allowRunAsRoot` | bool | `false` | Allow images that require running as root by setting `runAsNonRoot=false` for the job container. |
 | `job.serviceAccount.create` | bool | `false` | Create a dedicated ServiceAccount for the job action. |
 | `job.serviceAccount.name` | string | `""` | ServiceAccount name to create or reference. |
 | `job.serviceAccount.annotations` | object | `{}` | Annotations added to the created ServiceAccount. |
 | `job.automountServiceAccountToken` | bool | `false` | Mount the Kubernetes API token into the job Pod. |
 | `job.timeout` | string | `"30s"` | Job timeout propagated to the `ResourceAction`. |
+| `job.logTailLines` | int | `20` | Number of final job log lines to persist in `status.job.logTail`. |
 | `job.ttlSecondsAfterFinished` | int | `300` | Job cleanup TTL after completion. |
 | `job.backoffLimit` | int | `0` | Kubernetes Job retry limit. |
 | `job.resources` | object | `{}` | CPU and memory requests/limits for the job container. |

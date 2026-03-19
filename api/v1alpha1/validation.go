@@ -32,6 +32,16 @@ func ValidateResourceActionSpec(spec ResourceActionSpec) error {
 				return fmt.Errorf("invalid filters.namespaceRegex: %w", err)
 			}
 		}
+		if len(spec.Filters.LabelChanges) > 0 {
+			if !containsSpecEvent(spec.Events, "Update") {
+				return fmt.Errorf("filters.labelChanges requires event %q", "Update")
+			}
+			for i, change := range spec.Filters.LabelChanges {
+				if strings.TrimSpace(change.Key) == "" {
+					return fmt.Errorf("filters.labelChanges[%d].key is required", i)
+				}
+			}
+		}
 	}
 
 	for i, action := range spec.Actions {
@@ -119,6 +129,9 @@ func validateJobAction(i int, action ActionSpec) error {
 		if _, parseErr := time.ParseDuration(job.Timeout); parseErr != nil {
 			return fmt.Errorf("actions[%d].job.timeout invalid duration: %w", i, parseErr)
 		}
+	}
+	if job.LogTailLines != nil && *job.LogTailLines < 0 {
+		return fmt.Errorf("actions[%d].job.logTailLines must be >= 0", i)
 	}
 	return nil
 }
@@ -224,4 +237,13 @@ func validateActionURL(raw string) error {
 		return fmt.Errorf("host is required")
 	}
 	return nil
+}
+
+func containsSpecEvent(events []string, expected string) bool {
+	for _, event := range events {
+		if strings.EqualFold(event, expected) {
+			return true
+		}
+	}
+	return false
 }

@@ -5,9 +5,10 @@ A Kubernetes operator for event-driven HTTP and Job actions on Kubernetes resour
 ## Features
 
 - reacts to `Create`, `Update`, `Delete`
-- filters by GVK, name/namespace regex, and labels
+- filters by GVK, name/namespace regex, current labels, and label transitions on `Update`
 - executes HTTP calls with retries, timeouts, and expected status matching
 - creates Kubernetes Jobs for script/container-based actions
+- persists richer Job execution details including job name, pod name, status, exit code, and optional log tail
 - supports TLS/mTLS via Kubernetes secrets
 - supports URL safety policy (allow/block regex, default local/metadata protection)
 - stores execution history, retry/backoff metrics, and conditions in `status`
@@ -135,6 +136,18 @@ helm upgrade --install deployment-job charts/resource-action-job \
   --set job.image.tag=1.0.0
 ```
 
+Deploy a generic `ResourceAction` via the generic chart:
+
+```bash
+helm upgrade --install generic-action charts/resource-action \
+  --namespace default \
+  --set action.type=http \
+  --set selector.group=apps \
+  --set selector.version=v1 \
+  --set selector.kind=Deployment \
+  --set http.url=https://example.internal/hook
+```
+
 ## Release Pipeline
 
 GitHub Actions now includes:
@@ -146,7 +159,7 @@ Release workflow outputs:
 
 - multi-arch operator image to `ghcr.io/zdmr-space/resource-action-operator`
 - published Helm chart repository via GitHub Pages
-- packaged releases for `resource-action-operator` and `resource-action-job`
+- packaged releases for `resource-action-operator`, `resource-action-job`, and `resource-action`
 
 Create a release by pushing a tag such as `v0.2.0-rc5` or `v0.2.0`.
 
@@ -227,6 +240,9 @@ Job actions support:
 - read-only Secret and ConfigMap volume mounts
 - explicit ServiceAccount selection
 - container resource limits
+- optional `allowRunAsRoot`
+- `logTailLines` for bounded log persistence in status
+- default cleanup with `ttlSecondsAfterFinished=300` when the field is omitted
 
 Example:
 
@@ -307,6 +323,65 @@ spec:
 
 For cluster-scoped resources such as `Node`, the operator ServiceAccount needs additional RBAC permissions to watch that resource type.
 
+## Label Transition Matching
+
+For `Update` events, the operator can also compare the previous and current label state with `filters.labelChanges`.
+
+This allows transitions such as:
+
+- label was absent before and is now set to `true`
+- label changed from `false` to `true`
+- label was present before and is now removed
+
+Rules:
+
+- `from` omitted means the label must be absent before the update
+- `to` omitted means the label must be absent after the update
+- `from: "*"` matches any previous value as long as the label existed
+- `to: "*"` matches any new value as long as the label exists after the update
+
+Example for `absent -> true`:
+
+```yaml
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: node-label-transition-job
+  namespace: default
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Node
+  events:
+    - Update
+  filters:
+    labelChanges:
+      - key: demo.resource-action-operator/enabled
+        to: "true"
+  actions:
+    - type: job
+      mode: once
+      job:
+        image: bash:5.2
+        allowRunAsRoot: true
+        interpreterCommand:
+          - /bin/bash
+          - -c
+        script: |
+          echo "label transition matched"
+```
+
+Example for `false -> true`:
+
+```yaml
+filters:
+  labelChanges:
+    - key: demo.resource-action-operator/enabled
+      from: "false"
+      to: "true"
+```
+
 ## Security Model
 
 - Job actions run as Kubernetes Jobs, not as local processes inside the operator container.
@@ -314,13 +389,7 @@ For cluster-scoped resources such as `Node`, the operator ServiceAccount needs a
 - Job Pods use restrictive container defaults such as `allowPrivilegeEscalation=false` and dropped Linux capabilities.
 - Additional Kubernetes API permissions should be granted only through explicitly created ServiceAccounts and RoleBindings.
 - HTTP auth tokens, API keys, and certificates should be stored in Kubernetes Secrets and referenced from the `ResourceAction`.
-
-## Roadmap
-
-Planned for a follow-up release:
-
-- label-change based triggers for `Update` events, for example when a resource receives a specific label and this transition should trigger an HTTP action or Job action
-- richer update-aware filters that can evaluate old versus new label state instead of only matching the current label set
+- The operator chart supports optional `rbac.extraClusterRules` and `rbac.extraRules` so users can grant watch permissions for resources such as `nodes` without creating RBAC manifests by hand.
 
 ## Development
 
@@ -355,6 +424,7 @@ Notes:
 - Demo setup: `hack/demo/`
 - ResourceAction templates: `template-files/demo/`
 - Job action example: `template-files/resourceaction-job-bash.yaml`
+- Generic ResourceAction chart: `charts/resource-action`
 - Docs (AsciiDoc): `docs/`
 
 ## Documentation
@@ -390,6 +460,12 @@ Detailed usage and PromQL examples:
 ```bash
 docs/modules/ROOT/pages/metrics.adoc
 ```
+
+Additional Job metrics now include:
+
+- `resource_action_operator_job_runs_total{result}`
+- `resource_action_operator_job_duration_seconds{result}`
+- `resource_action_operator_job_log_tail_lines_total`
 
 ## License
 

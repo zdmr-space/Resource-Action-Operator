@@ -21,12 +21,15 @@ jobs:
       - name: Lint job chart
         run: helm lint charts/resource-action-job
 
+      - name: Lint generic ResourceAction chart
+        run: helm lint charts/resource-action
+
       - name: Render operator chart
         run: |
           helm template resource-action-operator charts/resource-action-operator \
             --set image.registry=ghcr.io \
             --set image.repository=zdmr-space/resource-action-operator \
-            --set image.tag=0.2.0-rc4 > /tmp/operator-chart.yaml
+            --set image.tag=0.2.0-rc5 > /tmp/operator-chart.yaml
 
       - name: Render job chart
         run: |
@@ -37,3 +40,13 @@ jobs:
             --set job.image.registry=registry.example.com \
             --set job.image.repository=platform/bash-runner \
             --set job.image.tag=1.2.3 > /tmp/job-chart.yaml
+
+      - name: Render generic ResourceAction chart
+        run: |
+          helm template generic-action charts/resource-action \
+            --set action.type=http \
+            --set selector.group=apps \
+            --set selector.version=v1 \
+            --set selector.kind=Deployment \
+            --set events[0]=Create \
+            --set http.url=https://example.internal/hook > /tmp/resource-action-chart.yaml

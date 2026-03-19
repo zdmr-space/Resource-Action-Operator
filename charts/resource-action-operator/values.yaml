@@ -30,6 +30,10 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+rbac:
+  extraClusterRules: []
+  extraRules: []
+
 leaderElection: true
 healthProbeBindAddress: ":8081"
 metrics:

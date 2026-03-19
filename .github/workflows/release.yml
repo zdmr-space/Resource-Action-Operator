@@ -99,6 +99,9 @@ jobs:
       - name: Lint job chart
         run: helm lint charts/resource-action-job
 
+      - name: Lint generic ResourceAction chart
+        run: helm lint charts/resource-action
+
       - name: Render operator chart
         run: |
           helm template resource-action-operator charts/resource-action-operator \
@@ -112,6 +115,16 @@ jobs:
             --set job.image.registry=registry.example.com \
             --set job.image.repository=platform/bash-runner \
             --set job.image.tag=1.2.3 > /tmp/job-chart.yaml
+
+      - name: Render generic ResourceAction chart
+        run: |
+          helm template generic-action charts/resource-action \
+            --set action.type=http \
+            --set selector.group=apps \
+            --set selector.version=v1 \
+            --set selector.kind=Deployment \
+            --set events[0]=Create \
+            --set http.url=https://example.internal/hook > /tmp/resource-action-chart.yaml
 
   publish-image:
     name: Publish Operator Image
@@ -234,3 +247,4 @@ jobs:
             Published artifacts:
             - Operator image: `ghcr.io/zdmr-space/resource-action-operator:${{ needs.prepare.outputs.version }}`
             - Helm chart repository: `https://zdmr-space.github.io/Resource-Action-Operator`
+            - Published Helm charts: `resource-action-operator`, `resource-action-job`, `resource-action`

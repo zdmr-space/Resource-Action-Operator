@@ -1,0 +1,5 @@
+ResourceAction {{ include "ra.resourceActionName" . }} has been rendered.
+
+Check the generated object with:
+
+  kubectl get resourceaction {{ include "ra.resourceActionName" . }} -n {{ default .Release.Namespace .Values.resourceAction.namespace }}

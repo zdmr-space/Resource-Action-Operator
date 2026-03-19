@@ -64,6 +64,30 @@ var (
 		},
 		[]string{"class"},
 	)
+
+	jobRunsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "resource_action_operator_job_runs_total",
+			Help: "Total number of ResourceAction job execution runs by result.",
+		},
+		[]string{"result"},
+	)
+
+	jobDurationSeconds = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "resource_action_operator_job_duration_seconds",
+			Help:    "Distribution of job execution durations per ResourceAction run.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"result"},
+	)
+
+	jobLogTailLinesTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "resource_action_operator_job_log_tail_lines_total",
+			Help: "Total number of persisted job log tail lines.",
+		},
+	)
 )
 
 func initEngineMetrics() {
@@ -76,6 +100,9 @@ func initEngineMetrics() {
 			httpBackoffSecondsTotal,
 			httpDurationSeconds,
 			httpLastStatusTotal,
+			jobRunsTotal,
+			jobDurationSeconds,
+			jobLogTailLinesTotal,
 		)
 	})
 }
@@ -110,4 +137,11 @@ type HTTPExecutionRecordMetrics struct {
 	BackoffMillis     int64
 	DurationMillis    int64
 	LastHTTPStatus    int
+}
+
+func observeJobExecution(result string, durationMillis int64, logTailLines int) {
+	initEngineMetrics()
+	jobRunsTotal.WithLabelValues(result).Inc()
+	jobDurationSeconds.WithLabelValues(result).Observe(float64(durationMillis) / 1000.0)
+	jobLogTailLinesTotal.Add(float64(logTailLines))
 }

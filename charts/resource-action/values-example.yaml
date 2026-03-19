@@ -1,0 +1,31 @@
+resourceAction:
+  namespace: default
+
+selector:
+  group: ""
+  version: v1
+  kind: Node
+
+events:
+  - Update
+
+filters:
+  labelChanges:
+    - key: demo.resource-action-operator/enabled
+      to: "true"
+
+action:
+  type: job
+  mode: once
+
+job:
+  image:
+    registry: registry.example.com
+    repository: platform/bash-runner
+    tag: 1.2.3
+  allowRunAsRoot: false
+  script: |
+    echo "node label transition matched"
+    date
+  logTailLines: 20
+  ttlSecondsAfterFinished: 300

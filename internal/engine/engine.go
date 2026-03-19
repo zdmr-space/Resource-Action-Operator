@@ -28,6 +28,7 @@ type MatchInput struct {
 	Event EventType
 	GVK   schema.GroupVersionKind
 	Obj   *unstructured.Unstructured
+	OldObj *unstructured.Unstructured
 }
 
 type Executor interface {
@@ -51,7 +52,7 @@ type Engine struct {
 }
 
 func NewEngine(c client.Client) *Engine {
-	exec := NewK8sExecutor(c)
+	exec := NewK8sExecutor(c, nil)
 	cron := NewCronEngine(c, exec)
 
 	return &Engine{
@@ -133,15 +134,19 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 			})
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
+			oldU, ok := oldObj.(*unstructured.Unstructured)
+			if !ok {
+				return
+			}
 			newU, ok := newObj.(*unstructured.Unstructured)
 			if !ok {
 				return
 			}
-			// Optional: only react if resourceVersion changed.
 			e.onEvent(context.Background(), MatchInput{
-				Event: EventUpdate,
-				GVK:   gvk,
-				Obj:   newU,
+				Event:  EventUpdate,
+				GVK:    gvk,
+				Obj:    newU,
+				OldObj: oldU,
 			})
 		},
 		DeleteFunc: func(obj interface{}) {

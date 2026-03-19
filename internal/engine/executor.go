@@ -9,9 +9,9 @@ import (
 	opsv1alpha1 "de.yusaozdemir.resource-action-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,12 +19,13 @@ import (
 )
 
 type K8sExecutor struct {
-	Client   client.Client
-	Recorder record.EventRecorder
+	Client    client.Client
+	Clientset kubernetes.Interface
+	Recorder  record.EventRecorder
 }
 
-func NewK8sExecutor(c client.Client, recorder ...record.EventRecorder) *K8sExecutor {
-	exec := &K8sExecutor{Client: c}
+func NewK8sExecutor(c client.Client, clientset kubernetes.Interface, recorder ...record.EventRecorder) *K8sExecutor {
+	exec := &K8sExecutor{Client: c, Clientset: clientset}
 	if len(recorder) > 0 {
 		exec.Recorder = recorder[0]
 	}
@@ -49,6 +50,7 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 		totalBackoffMillis := int64(0)
 		totalDurationMillis := int64(0)
 		lastHTTPStatus := 0
+		var lastJobDetails *opsv1alpha1.JobExecutionRecord
 
 		if !matchesSelector(ra.Spec.Selector, input.GVK) {
 			continue
@@ -56,7 +58,7 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 		if !containsEvent(ra.Spec.Events, string(input.Event)) {
 			continue
 		}
-		if !matchesFilters(ra.Spec.Filters, input.Obj) {
+		if !matchesFilters(ra.Spec.Filters, input) {
 			continue
 		}
 		if alreadyExecuted(&ra, input.Obj.GetUID(), string(input.Event)) {
@@ -69,7 +71,7 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 		}
 
 		httpExec := NewHTTPExecutor(e.Client)
-		jobExec := NewJobExecutor(e.Client)
+		jobExec := NewJobExecutor(e.Client, e.Clientset)
 
 		for i, action := range ra.Spec.Actions {
 			if action.Mode == "cron" || action.Mode == "schedule" {
@@ -94,6 +96,9 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 			if actionMetrics.StatusCode > 0 {
 				lastHTTPStatus = actionMetrics.StatusCode
 			}
+			if actionMetrics.Job != nil {
+				lastJobDetails = actionMetrics.Job.DeepCopy()
+			}
 			executedActions++
 			if err != nil {
 				execErr = err
@@ -117,6 +122,7 @@ func (e *K8sExecutor) Execute(ctx context.Context, input MatchInput) error {
 			BackoffMillis:     totalBackoffMillis,
 			DurationMillis:    totalDurationMillis,
 			LastHTTPStatus:    lastHTTPStatus,
+			Job:               lastJobDetails,
 		}
 
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -209,6 +215,7 @@ func (e *K8sExecutor) executeAction(
 		return HTTPExecutionMetrics{
 			Attempts:       jobMetrics.Attempts,
 			DurationMillis: jobMetrics.DurationMillis,
+			Job:            jobMetrics.Details,
 		}, err
 	default:
 		return HTTPExecutionMetrics{}, fmt.Errorf("unsupported action type %q", action.Type)
@@ -289,10 +296,11 @@ func matchesSelector(sel opsv1alpha1.ResourceSelector, gvk schema.GroupVersionKi
 		sel.Kind == gvk.Kind
 }
 
-func matchesFilters(filter *opsv1alpha1.FilterSpec, obj *unstructured.Unstructured) bool {
+func matchesFilters(filter *opsv1alpha1.FilterSpec, input MatchInput) bool {
 	if filter == nil {
 		return true
 	}
+	obj := input.Obj
 
 	if filter.NameRegex != "" {
 		re, err := regexp.Compile(filter.NameRegex)
@@ -317,7 +325,39 @@ func matchesFilters(filter *opsv1alpha1.FilterSpec, obj *unstructured.Unstructur
 		}
 	}
 
+	if len(filter.LabelChanges) > 0 {
+		if input.Event != EventUpdate || input.OldObj == nil {
+			return false
+		}
+		oldLabels := input.OldObj.GetLabels()
+		newLabels := obj.GetLabels()
+		for _, change := range filter.LabelChanges {
+			if !matchesLabelChange(change, oldLabels, newLabels) {
+				return false
+			}
+		}
+	}
+
 	return true
+}
+
+func matchesLabelChange(change opsv1alpha1.LabelChangeFilter, oldLabels, newLabels map[string]string) bool {
+	oldValue, oldExists := oldLabels[change.Key]
+	newValue, newExists := newLabels[change.Key]
+
+	return labelValueMatches(change.From, oldExists, oldValue) &&
+		labelValueMatches(change.To, newExists, newValue)
+}
+
+func labelValueMatches(expected string, exists bool, value string) bool {
+	switch expected {
+	case "":
+		return !exists
+	case "*":
+		return exists
+	default:
+		return exists && value == expected
+	}
 }
 
 func containsEvent(events []string, ev string) bool {

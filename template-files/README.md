@@ -184,6 +184,12 @@ Creates a `ResourceAction` that reacts to `Node` update events and matches Nodes
 
 It launches a Kubernetes Job and is useful for testing label-based Job execution on cluster-scoped resources.
 
+### `demo/resourceaction-node-label-transition-job.yaml`
+
+Creates a `ResourceAction` that reacts only when a `Node` label changes on update, for example when `demo.resource-action-operator/enabled` transitions from absent to `true`.
+
+Use it to validate old-versus-new label matching instead of only matching the current label set.
+
 ## Typical Usage
 
 Apply a simple standalone example:
@@ -227,6 +233,14 @@ Run the node-label-to-job demo in the correct order:
 ```bash
 kubectl apply -f template-files/demo/operator-node-watch-rbac.yaml
 kubectl apply -f template-files/demo/resourceaction-node-label-job.yaml
+kubectl label node <node-name> demo.resource-action-operator/enabled=true --overwrite
+```
+
+Run the node label transition demo in the correct order:
+
+```bash
+kubectl apply -f template-files/demo/operator-node-watch-rbac.yaml
+kubectl apply -f template-files/demo/resourceaction-node-label-transition-job.yaml
 kubectl label node <node-name> demo.resource-action-operator/enabled=true --overwrite
 ```
 

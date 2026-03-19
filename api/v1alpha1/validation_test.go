@@ -154,3 +154,58 @@ func TestValidateResourceActionSpec_JobVolumeMountRequiresDefinedVolume(t *testi
 		t.Fatalf("expected invalid volume mount reference, got nil")
 	}
 }
+
+func TestValidateResourceActionSpec_LabelChangesRequireUpdateEvent(t *testing.T) {
+	spec := ResourceActionSpec{
+		Selector: ResourceSelector{
+			Version: "v1",
+			Kind:    "Node",
+		},
+		Events: []string{"Create"},
+		Filters: &FilterSpec{
+			LabelChanges: []LabelChangeFilter{
+				{
+					Key: "demo.resource-action-operator/enabled",
+					To:  "true",
+				},
+			},
+		},
+		Actions: []ActionSpec{
+			{
+				Type: "http",
+				URL:  "https://example.com",
+			},
+		},
+	}
+
+	if err := ValidateResourceActionSpec(spec); err == nil {
+		t.Fatalf("expected labelChanges validation error, got nil")
+	}
+}
+
+func TestValidateResourceActionSpec_LabelChangesRequireKey(t *testing.T) {
+	spec := ResourceActionSpec{
+		Selector: ResourceSelector{
+			Version: "v1",
+			Kind:    "Node",
+		},
+		Events: []string{"Update"},
+		Filters: &FilterSpec{
+			LabelChanges: []LabelChangeFilter{
+				{
+					To: "true",
+				},
+			},
+		},
+		Actions: []ActionSpec{
+			{
+				Type: "http",
+				URL:  "https://example.com",
+			},
+		},
+	}
+
+	if err := ValidateResourceActionSpec(spec); err == nil {
+		t.Fatalf("expected labelChanges key validation error, got nil")
+	}
+}

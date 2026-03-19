@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/kubernetes"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -156,7 +157,13 @@ func main() {
 	// =========================
 	// Event Engine initialisieren
 	// =========================
-	exec := engine.NewK8sExecutor(mgr.GetClient(), mgr.GetEventRecorderFor("resource-action-operator"))
+	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to create kubernetes clientset")
+		os.Exit(1)
+	}
+
+	exec := engine.NewK8sExecutor(mgr.GetClient(), clientset, mgr.GetEventRecorderFor("resource-action-operator"))
 
 	eng, err := engine.New(mgr.GetConfig(), exec)
 	if err != nil {

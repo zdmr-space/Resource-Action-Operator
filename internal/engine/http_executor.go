@@ -42,6 +42,7 @@ type HTTPExecutionMetrics struct {
 	StatusRetryCount  int
 	BackoffMillis     int64
 	DurationMillis    int64
+	Job               *opsv1alpha1.JobExecutionRecord
 }
 
 func NewHTTPExecutor(k8s client.Client) *HTTPExecutor {

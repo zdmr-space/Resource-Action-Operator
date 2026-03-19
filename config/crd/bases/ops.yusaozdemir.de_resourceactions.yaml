@@ -123,6 +123,10 @@ spec:
                           items:
                             type: string
                           type: array
+                        logTailLines:
+                          default: 0
+                          format: int32
+                          type: integer
                         resources:
                           type: object
                           x-kubernetes-preserve-unknown-fields: true
@@ -278,6 +282,21 @@ spec:
                 type: array
               filters:
                 properties:
+                  labelChanges:
+                    items:
+                      properties:
+                        from:
+                          description: Leave empty to require the label to be absent before the update. Use "*" to match any previous value.
+                          type: string
+                        key:
+                          type: string
+                        to:
+                          description: Leave empty to require the label to be absent after the update. Use "*" to match any new value.
+                          type: string
+                      required:
+                      - key
+                      type: object
+                    type: array
                   labels:
                     additionalProperties:
                       type: string
@@ -383,6 +402,30 @@ spec:
                       type: string
                     lastHttpStatus:
                       type: integer
+                    job:
+                      properties:
+                        completedAt:
+                          format: date-time
+                          type: string
+                        exitCode:
+                          format: int32
+                          type: integer
+                        logTail:
+                          items:
+                            type: string
+                          type: array
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                        podName:
+                          type: string
+                        startedAt:
+                          format: date-time
+                          type: string
+                        status:
+                          type: string
+                      type: object
                     networkRetryCount:
                       type: integer
                     resourceUID:

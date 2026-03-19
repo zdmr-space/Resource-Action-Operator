@@ -64,6 +64,9 @@ func (c *CronEngine) EnsureForMatch(ctx context.Context, input MatchInput) error
 		if !containsEvent(ra.Spec.Events, string(input.Event)) {
 			continue
 		}
+		if !matchesFilters(ra.Spec.Filters, input) {
+			continue
+		}
 
 		for i, action := range ra.Spec.Actions {
 			if action.Mode != "cron" && action.Mode != "schedule" {

@@ -31,7 +31,7 @@ func newTestExecutor(t *testing.T, objects ...client.Object) (*K8sExecutor, clie
 		WithStatusSubresource(&opsv1alpha1.ResourceAction{}).
 		WithObjects(objects...).
 		Build()
-	return NewK8sExecutor(cl), cl
+	return NewK8sExecutor(cl, nil), cl
 }
 
 func newDeploymentInput(uid, name, namespace string) MatchInput {
@@ -54,6 +54,50 @@ func newDeploymentInput(uid, name, namespace string) MatchInput {
 			},
 		},
 	}
+}
+
+func newNodeUpdateInput(uid, name string, oldLabels, newLabels map[string]string) MatchInput {
+	return MatchInput{
+		Event: EventUpdate,
+		GVK: schema.GroupVersionKind{
+			Group:   "",
+			Version: "v1",
+			Kind:    "Node",
+		},
+		Obj: &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Node",
+				"metadata": map[string]interface{}{
+					"name":   name,
+					"uid":    uid,
+					"labels": oldMapToInterfaceMap(newLabels),
+				},
+			},
+		},
+		OldObj: &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "v1",
+				"kind":       "Node",
+				"metadata": map[string]interface{}{
+					"name":   name,
+					"uid":    uid,
+					"labels": oldMapToInterfaceMap(oldLabels),
+				},
+			},
+		},
+	}
+}
+
+func oldMapToInterfaceMap(in map[string]string) map[string]interface{} {
+	if in == nil {
+		return map[string]interface{}{}
+	}
+	out := make(map[string]interface{}, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 func TestExecute_CronOnlyAction_DoesNotWriteStatus(t *testing.T) {
@@ -241,5 +285,115 @@ func TestExecute_JobAction_CreatesBatchJob(t *testing.T) {
 	}
 	if !container.VolumeMounts[0].ReadOnly || !container.VolumeMounts[1].ReadOnly {
 		t.Fatalf("expected all volume mounts to be read-only by default")
+	}
+}
+
+func TestExecute_LabelChangeFilter_MatchesAbsentToTrue(t *testing.T) {
+	ra := &opsv1alpha1.ResourceAction{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ra-label-change",
+			Namespace: "default",
+		},
+		Spec: opsv1alpha1.ResourceActionSpec{
+			Selector: opsv1alpha1.ResourceSelector{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Node",
+			},
+			Events: []string{"Update"},
+			Filters: &opsv1alpha1.FilterSpec{
+				LabelChanges: []opsv1alpha1.LabelChangeFilter{
+					{
+						Key: "demo.resource-action-operator/enabled",
+						To:  "true",
+					},
+				},
+			},
+			Actions: []opsv1alpha1.ActionSpec{
+				{
+					Type: "job",
+					Job: &opsv1alpha1.JobSpec{
+						Image:   "bash:5.2",
+						Script:  "echo hello",
+						Command: nil,
+					},
+				},
+			},
+		},
+	}
+
+	exec, cl := newTestExecutor(t, ra)
+	input := newNodeUpdateInput(
+		"uid-node-1",
+		"node-a",
+		map[string]string{},
+		map[string]string{"demo.resource-action-operator/enabled": "true"},
+	)
+
+	if err := exec.Execute(context.Background(), input); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	var jobs batchv1.JobList
+	if err := cl.List(context.Background(), &jobs); err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 1 {
+		t.Fatalf("expected 1 job, got %d", len(jobs.Items))
+	}
+}
+
+func TestExecute_LabelChangeFilter_DoesNotMatchUnchangedLabel(t *testing.T) {
+	ra := &opsv1alpha1.ResourceAction{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ra-label-unchanged",
+			Namespace: "default",
+		},
+		Spec: opsv1alpha1.ResourceActionSpec{
+			Selector: opsv1alpha1.ResourceSelector{
+				Group:   "",
+				Version: "v1",
+				Kind:    "Node",
+			},
+			Events: []string{"Update"},
+			Filters: &opsv1alpha1.FilterSpec{
+				LabelChanges: []opsv1alpha1.LabelChangeFilter{
+					{
+						Key: "demo.resource-action-operator/enabled",
+						To:  "true",
+					},
+				},
+			},
+			Actions: []opsv1alpha1.ActionSpec{
+				{
+					Type: "job",
+					Job: &opsv1alpha1.JobSpec{
+						Image:   "bash:5.2",
+						Script:  "echo hello",
+						Command: nil,
+					},
+				},
+			},
+		},
+	}
+
+	exec, cl := newTestExecutor(t, ra)
+	input := newNodeUpdateInput(
+		"uid-node-2",
+		"node-b",
+		map[string]string{"demo.resource-action-operator/enabled": "true"},
+		map[string]string{"demo.resource-action-operator/enabled": "true"},
+	)
+
+	if err := exec.Execute(context.Background(), input); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	var jobs batchv1.JobList
+	if err := cl.List(context.Background(), &jobs); err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if len(jobs.Items) != 0 {
+		t.Fatalf("expected 0 jobs, got %d", len(jobs.Items))
 	}
 }
