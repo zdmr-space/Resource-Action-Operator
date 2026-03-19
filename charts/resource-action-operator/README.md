@@ -72,6 +72,37 @@ helm upgrade --install resource-action-operator charts/resource-action-operator 
 
 For extra namespaced permissions, use `rbac.extraRules`.
 
+## Operator resources
+
+The chart defaults are tuned to stay lightweight while still reserving enough CPU and memory for informer caches, leader election, metrics, and Job or HTTP execution bookkeeping:
+
+- requests: `50m` CPU, `128Mi` memory
+- limits: `250m` CPU, `256Mi` memory
+
+Example for a smaller lab or k3s cluster:
+
+```bash
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  --set resources.requests.cpu=25m \
+  --set resources.requests.memory=96Mi \
+  --set resources.limits.cpu=150m \
+  --set resources.limits.memory=192Mi
+```
+
+Example for a busier cluster with more watched resources:
+
+```bash
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  --set resources.requests.cpu=100m \
+  --set resources.requests.memory=192Mi \
+  --set resources.limits.cpu=500m \
+  --set resources.limits.memory=512Mi
+```
+
 ## Example values file
 
 ```bash

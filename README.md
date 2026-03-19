@@ -75,6 +75,13 @@ helm upgrade --install resource-action-operator charts/resource-action-operator 
   --create-namespace
 ```
 
+The default operator resource profile is intentionally modest:
+
+- requests: `50m` CPU, `128Mi` memory
+- limits: `250m` CPU, `256Mi` memory
+
+You can override it for smaller k3s nodes or busier clusters with `resources.requests.*` and `resources.limits.*`.
+
 Enable admission webhook with cert-manager:
 
 ```bash

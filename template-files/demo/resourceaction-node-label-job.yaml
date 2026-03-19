@@ -17,7 +17,7 @@ spec:
     - type: job
       mode: once
       job:
-        image: bash:5.2
+        image: ubuntu
         allowRunAsRoot: true
         interpreterCommand:
           - /bin/bash
