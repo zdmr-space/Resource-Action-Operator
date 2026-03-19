@@ -25,6 +25,14 @@ type JobExecutionMetrics struct {
 	Details        *opsv1alpha1.JobExecutionRecord
 }
 
+const (
+	jobStatusCreated   = "Created"
+	jobStatusRunning   = "Running"
+	jobStatusSucceeded = "Succeeded"
+	jobStatusFailed    = "Failed"
+	jobStatusTimeout   = "Timeout"
+)
+
 type JobExecutor struct {
 	k8s       client.Client
 	clientset kubernetes.Interface
@@ -60,7 +68,7 @@ func (e *JobExecutor) Execute(
 	metrics.Details = &opsv1alpha1.JobExecutionRecord{
 		Name:      jobObj.Name,
 		Namespace: jobObj.Namespace,
-		Status:    "Created",
+		Status:    jobStatusCreated,
 	}
 
 	go e.trackJobExecution(context.Background(), ra, input, jobObj, action.Job)
@@ -232,7 +240,7 @@ func (e *JobExecutor) trackJobExecution(
 			e.updateJobExecutionRecord(context.Background(), ra, input, opsv1alpha1.JobExecutionRecord{
 				Name:      jobObj.Name,
 				Namespace: jobObj.Namespace,
-				Status:    "Timeout",
+				Status:    jobStatusTimeout,
 			})
 			return
 		case <-ticker.C:
@@ -243,9 +251,9 @@ func (e *JobExecutor) trackJobExecution(
 
 			record := e.collectJobExecutionDetails(watchCtx, current, jobSpec)
 			e.updateJobExecutionRecord(context.Background(), ra, input, record)
-			if record.Status == "Succeeded" || record.Status == "Failed" {
+			if record.Status == jobStatusSucceeded || record.Status == jobStatusFailed {
 				result := "failure"
-				if record.Status == "Succeeded" {
+				if record.Status == jobStatusSucceeded {
 					result = "success"
 				}
 				observeJobExecution(result, time.Since(time.UnixMilli(current.CreationTimestamp.UnixMilli())).Milliseconds(), len(record.LogTail))
@@ -290,15 +298,15 @@ func deriveJobStatus(job batchv1.Job) string {
 		}
 		switch condition.Type {
 		case batchv1.JobComplete:
-			return "Succeeded"
+			return jobStatusSucceeded
 		case batchv1.JobFailed:
-			return "Failed"
+			return jobStatusFailed
 		}
 	}
 	if job.Status.Active > 0 {
-		return "Running"
+		return jobStatusRunning
 	}
-	return "Created"
+	return jobStatusCreated
 }
 
 func (e *JobExecutor) findJobPodDetails(ctx context.Context, job batchv1.Job) (string, *int32) {
@@ -338,7 +346,9 @@ func (e *JobExecutor) fetchPodLogTail(ctx context.Context, namespace, podName st
 	if err != nil {
 		return nil
 	}
-	defer stream.Close()
+	defer func() {
+		_ = stream.Close()
+	}()
 
 	data, err := io.ReadAll(stream)
 	if err != nil {
