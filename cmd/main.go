@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -52,6 +53,7 @@ func main() {
 	var enableLeaderElection bool
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var enableWebhook bool
 
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
@@ -66,6 +68,8 @@ func main() {
 		"Serve metrics securely via HTTPS.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"Enable HTTP/2 for metrics and webhook servers")
+	flag.BoolVar(&enableWebhook, "enable-webhook", false,
+		"Enable admission webhook registration and serving")
 
 	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "Webhook cert directory")
 	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "Webhook cert name")
@@ -153,7 +157,13 @@ func main() {
 	// =========================
 	// Event Engine initialisieren
 	// =========================
-	exec := engine.NewK8sExecutor(mgr.GetClient())
+	clientset, err := kubernetes.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		setupLog.Error(err, "unable to create kubernetes clientset")
+		os.Exit(1)
+	}
+
+	exec := engine.NewK8sExecutor(mgr.GetClient(), clientset, mgr.GetEventRecorderFor("resource-action-operator"))
 
 	eng, err := engine.New(mgr.GetConfig(), exec)
 	if err != nil {
@@ -168,6 +178,12 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceAction")
 		os.Exit(1)
+	}
+	if enableWebhook {
+		if err = (&opsv1alpha1.ResourceAction{}).SetupWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ResourceAction")
+			os.Exit(1)
+		}
 	}
 
 	if metricsCertWatcher != nil {

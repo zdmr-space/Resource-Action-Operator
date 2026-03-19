@@ -1,0 +1,177 @@
+= Helm Deployment
+:page-title: Helm Deployment
+
+This page documents the recommended Helm-based installation workflow for the operator.
+
+== Chart Location
+
+- `charts/resource-action-operator`
+- `charts/resource-action-job`
+
+== Defaults
+
+- webhook is disabled by default
+- cert-manager resources are disabled by default
+- default install works without cert-manager
+
+== Install
+
+[source,bash]
+----
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace
+----
+
+Install from the published chart repository:
+
+[source,bash]
+----
+helm repo add resource-action-operator https://zdmr-space.github.io/Resource-Action-Operator
+helm repo update
+
+helm upgrade --install resource-action-operator resource-action-operator/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace
+----
+
+Equivalent Make target:
+
+[source,bash]
+----
+make helm-install
+----
+
+== Enable Admission Webhook With Cert-Manager
+
+[source,bash]
+----
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  --set webhook.enabled=true \
+  --set webhook.certManager.enabled=true
+----
+
+Equivalent Make target:
+
+[source,bash]
+----
+make helm-install-webhook
+----
+
+== Use A Custom Operator Image
+
+[source,bash]
+----
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  --set image.registry=registry.example.com \
+  --set image.repository=platform/resource-action-operator \
+  --set image.tag=<tag> \
+  --set image.pullPolicy=IfNotPresent
+----
+
+You can also deploy by digest instead of a tag:
+
+[source,bash]
+----
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  --set image.registry=registry.example.com \
+  --set image.repository=platform/resource-action-operator \
+  --set image.digest=sha256:<digest>
+----
+
+== Create Job-Based ResourceActions With Helm
+
+Use the dedicated job chart when application teams should create `ResourceAction` objects without writing the CRD by hand.
+
+[source,bash]
+----
+helm upgrade --install deployment-job charts/resource-action-job \
+  --namespace default \
+  --set selector.group=apps \
+  --set selector.version=v1 \
+  --set selector.kind=Deployment \
+  --set job.image.registry=registry.example.com \
+  --set job.image.repository=platform/bash-runner \
+  --set job.image.tag=1.0.0
+----
+
+The job chart also supports digest-based images:
+
+[source,bash]
+----
+helm upgrade --install deployment-job charts/resource-action-job \
+  --namespace default \
+  --set job.image.registry=registry.example.com \
+  --set job.image.repository=platform/bash-runner \
+  --set job.image.digest=sha256:<digest>
+----
+
+Or install the published chart:
+
+[source,bash]
+----
+helm repo add resource-action-operator https://zdmr-space.github.io/Resource-Action-Operator
+helm repo update
+
+helm upgrade --install deployment-job resource-action-operator/resource-action-job \
+  --namespace default
+----
+
+== Validate And Render
+
+Lint chart:
+
+[source,bash]
+----
+make helm-lint
+----
+
+Render manifests:
+
+[source,bash]
+----
+make helm-template
+----
+
+== Uninstall
+
+[source,bash]
+----
+helm uninstall resource-action-operator -n resource-action-operator-system
+----
+
+Equivalent Make target:
+
+[source,bash]
+----
+make helm-uninstall
+----
+
+== Important Values
+
+- `image.repository`
+- `image.registry`
+- `image.tag`
+- `image.digest`
+- `image.pullPolicy`
+- `webhook.enabled`
+- `webhook.certManager.enabled`
+- `webhook.failurePolicy`
+- `webhook.path`
+- `webhook.caBundle` (for non-cert-manager webhook trust scenarios)
+- `job.image.registry` in the `resource-action-job` chart
+- `job.image.repository` in the `resource-action-job` chart
+- `job.image.tag` in the `resource-action-job` chart
+- `job.image.digest` in the `resource-action-job` chart
+
+== Notes
+
+- Helm CRDs from `charts/resource-action-operator/crds` are installed on chart install.
+- CRDs are not automatically removed on Helm uninstall.
+- For full cleanup in demo cycles, also delete `resourceactions.ops.yusaozdemir.de`.

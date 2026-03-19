@@ -1,0 +1,34 @@
+= Resource Action Operator
+:page-title: Overview
+
+Resource Action Operator executes declarative HTTP and Job actions on Kubernetes events.
+
+== Core Concepts
+
+- `ResourceAction` selects target resources by Group/Version/Kind
+- events (`Create`, `Update`, `Delete`) define when actions are triggered
+- optional filters (name/namespace/labels) narrow trigger scope
+- HTTP actions support retries, timeouts, TLS, and templated bodies
+- Job actions create Kubernetes Jobs with user-provided images, commands, or scripts
+
+== Getting Started
+
+- xref:quickstart.adoc[Quickstart]
+- xref:actions.adoc[Action Types]
+- xref:helm.adoc[Helm Deployment]
+- xref:demo.adoc[Demo Setup]
+
+== Deployment Modes
+
+- Helm is the recommended install path for cluster deployment.
+- Helm default mode works without cert-manager.
+- Admission webhook mode is optional and requires cert-manager.
+- Kustomize deployment remains available for development workflows.
+- A second Helm chart is available for creating `type: job` ResourceActions.
+
+== Recent Changes
+
+- Added a Helm chart under `charts/resource-action-operator`.
+- Added Helm Make targets: `helm-lint`, `helm-template`, `helm-install`, `helm-install-webhook`, `helm-uninstall`.
+- Updated demo scripts to deploy and remove the operator with Helm.
+- Added `type: job` actions for Kubernetes Job-based script and command execution.

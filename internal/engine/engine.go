@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
@@ -26,9 +25,10 @@ const (
 )
 
 type MatchInput struct {
-	Event EventType
-	GVK   schema.GroupVersionKind
-	Obj   *unstructured.Unstructured
+	Event  EventType
+	GVK    schema.GroupVersionKind
+	Obj    *unstructured.Unstructured
+	OldObj *unstructured.Unstructured
 }
 
 type Executor interface {
@@ -36,12 +36,12 @@ type Executor interface {
 }
 
 type Engine struct {
-	cfg    *rest.Config
-	dyn    dynamic.Interface
-	disco  discovery.DiscoveryInterface
-	mapper meta.RESTMapper
+	cfg   *rest.Config
+	dyn   dynamic.Interface
+	disco discovery.DiscoveryInterface
 
 	factory dynamicinformer.DynamicSharedInformerFactory
+	runCtx  context.Context
 
 	mu        sync.Mutex
 	started   bool
@@ -53,13 +53,14 @@ type Engine struct {
 }
 
 func NewEngine(c client.Client) *Engine {
-	exec := NewK8sExecutor(c)
+	exec := NewK8sExecutor(c, nil)
 	cron := NewCronEngine(c, exec)
 
 	return &Engine{
 		client:     c,
 		executor:   exec, // Interface
 		cronEngine: cron,
+		runCtx:     context.Background(),
 		informers:  make(map[schema.GroupVersionResource]cache.SharedIndexInformer),
 	}
 }
@@ -91,11 +92,12 @@ func New(cfg *rest.Config, executor Executor) (*Engine, error) {
 		executor:   executor,
 		cronEngine: cron,
 		factory:    factory,
+		runCtx:     context.Background(),
 		informers:  make(map[schema.GroupVersionResource]cache.SharedIndexInformer),
 	}, nil
 }
 
-// Resolve GVK -> GVR via discovery RESTMapping
+// Resolve GVK -> GVR via discovery REST mapping.
 func (e *Engine) ResolveGVR(gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) {
 	gr, err := restMapping(e.disco, gvk)
 	if err != nil {
@@ -104,9 +106,9 @@ func (e *Engine) ResolveGVR(gvk schema.GroupVersionKind) (schema.GroupVersionRes
 	return gr, nil
 }
 
-// EnsureWatching sorgt dafür, dass ein Informer für die Ressource läuft.
+// EnsureWatching makes sure an informer for this resource is running.
 func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind) error {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 
 	gvr, err := e.ResolveGVR(gvk)
 	if err != nil {
@@ -117,12 +119,12 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 	defer e.mu.Unlock()
 
 	if _, ok := e.informers[gvr]; ok {
-		return nil // läuft schon
+		return nil // already running
 	}
 
 	inf := e.factory.ForResource(gvr).Informer()
 
-	inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+	if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			u, ok := obj.(*unstructured.Unstructured)
 			if !ok {
@@ -135,19 +137,23 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 			})
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
+			oldU, ok := oldObj.(*unstructured.Unstructured)
+			if !ok {
+				return
+			}
 			newU, ok := newObj.(*unstructured.Unstructured)
 			if !ok {
 				return
 			}
-			// Optional: nur reagieren wenn resourceVersion sich ändert
 			e.onEvent(context.Background(), MatchInput{
-				Event: EventUpdate,
-				GVK:   gvk,
-				Obj:   newU,
+				Event:  EventUpdate,
+				GVK:    gvk,
+				Obj:    newU,
+				OldObj: oldU,
 			})
 		},
 		DeleteFunc: func(obj interface{}) {
-			// Delete kann Tombstone sein
+			// Delete may come as a tombstone.
 			var u *unstructured.Unstructured
 			switch t := obj.(type) {
 			case *unstructured.Unstructured:
@@ -165,16 +171,20 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 				Obj:   u,
 			})
 		},
-	})
+	}); err != nil {
+		return fmt.Errorf("add event handler for %s: %w", gvr.String(), err)
+	}
 
 	e.informers[gvr] = inf
-	log.Info("Started watching resource", "gvk", gvk.String(), "gvr", gvr.String())
+	logger.Info("Started watching resource", "gvk", gvk.String(), "gvr", gvr.String())
 
-	// Factory starten (einmalig)
+	// Start factory once.
 	if !e.started {
 		e.started = true
-		e.cronEngine.Start(ctx)
-		go e.factory.Start(ctx.Done())
+		e.cronEngine.Start(e.runCtx)
+		go e.factory.Start(e.runCtx.Done())
+	} else {
+		go inf.Run(e.runCtx.Done())
 	}
 
 	return nil
@@ -183,20 +193,20 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 func (e *Engine) onEvent(ctx context.Context, input MatchInput) {
 	logger := log.FromContext(ctx)
 
-	// 1️⃣ Cron-Jobs sicherstellen (einmalig)
+	// 1) Ensure cron jobs are registered (once).
 	err := e.cronEngine.EnsureForMatch(ctx, input)
 	if err != nil {
 		logger.Error(err, "failed to ensure cron jobs")
 	}
 
-	// 2️⃣ Event-basierte Actions ausführen (once)
+	// 2) Execute event-based actions (once mode).
 	if err := e.executor.Execute(ctx, input); err != nil {
 		logger.Error(err, "executor failed")
 	}
 }
 
 func restMapping(d discovery.DiscoveryInterface, gvk schema.GroupVersionKind) (schema.GroupVersionResource, error) {
-	// Discovery: alle Ressourcen der Version holen
+	// Discovery: list all resources for this group/version.
 	resources, err := d.ServerResourcesForGroupVersion(gvk.GroupVersion().String())
 	if err != nil {
 		return schema.GroupVersionResource{}, err

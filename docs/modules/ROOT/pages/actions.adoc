@@ -1,0 +1,131 @@
+= Action Types
+:page-title: Action Types
+
+This page documents the supported `ResourceAction.spec.actions[]` types and the recommended security model.
+
+== Supported Types
+
+- `type: http`
+- `type: job`
+
+There is no `type: https`. HTTPS is configured by using an `https://` URL with `type: http`.
+
+== HTTP Actions
+
+Use HTTP actions for webhooks and API calls.
+
+[source,yaml]
+----
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: deployment-webhook
+  namespace: default
+spec:
+  selector:
+    group: apps
+    version: v1
+    kind: Deployment
+  events:
+    - Create
+  actions:
+    - type: http
+      method: POST
+      url: https://example.internal/hook
+      expectedStatus: "^2..$"
+      headers:
+        Authorization:
+          secretKeyRef:
+            name: webhook-token
+            key: bearer
+      tls:
+        insecureSkipVerify: true
+----
+
+Notes:
+
+- `https://` enables HTTPS.
+- `tls.insecureSkipVerify=true` disables certificate verification for this action.
+- mTLS and custom CAs can be provided via Secret references.
+- Secret-backed headers are preferred over storing tokens directly in the manifest.
+
+== Job Actions
+
+Use Job actions to create Kubernetes Jobs that execute a script or command in a user-supplied image.
+
+[source,yaml]
+----
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: deployment-job
+  namespace: default
+spec:
+  selector:
+    group: apps
+    version: v1
+    kind: Deployment
+  events:
+    - Create
+  actions:
+    - type: job
+      mode: once
+      job:
+        image: bash:5.2
+        interpreterCommand:
+          - /bin/bash
+          - -c
+        script: |
+          echo "deployment created"
+        serviceAccountName: restricted-runner
+        automountServiceAccountToken: false
+        timeout: 30s
+        ttlSecondsAfterFinished: 300
+----
+
+Job actions support:
+
+- arbitrary container images
+- script execution via `script` and `interpreterCommand`
+- direct command execution via `command` and `args`
+- Secret-backed environment variables
+- read-only Secret and ConfigMap volume mounts
+- explicit ServiceAccount selection
+- resource limits and TTL-after-finish cleanup
+
+Example with Secret and ConfigMap mounts:
+
+[source,yaml]
+----
+actions:
+  - type: job
+    job:
+      image: bash:5.2
+      interpreterCommand:
+        - /bin/bash
+        - -c
+      script: |
+        ls -la /var/run/tls
+        ls -la /opt/scripts
+      volumes:
+        - name: tls
+          secret:
+            secretName: api-client-cert
+        - name: scripts
+          configMap:
+            name: job-scripts
+      volumeMounts:
+        - name: tls
+          mountPath: /var/run/tls
+        - name: scripts
+          mountPath: /opt/scripts
+----
+
+== Security Recommendations
+
+- Treat `ResourceAction` write access as sensitive. A user who can create Job actions can cause workload execution in the cluster.
+- Keep Job Pods on a dedicated, restricted ServiceAccount by default.
+- Only grant additional permissions by pre-creating a ServiceAccount and binding the needed roles explicitly.
+- Store HTTP tokens, API keys, and certificates in Secrets and reference them from the action.
+- Restrict mounted volumes to read-only file inputs such as Secrets and ConfigMaps.
+- Avoid `tls.insecureSkipVerify=true` in production unless there is a controlled bootstrap or internal-only use case.

@@ -1,0 +1,51 @@
+resourceAction:
+  namespace: default
+
+selector:
+  group: apps
+  version: v1
+  kind: Deployment
+
+events:
+  - Update
+
+filters:
+  labels:
+    demo.resource-action-operator/enabled: "true"
+  labelChanges:
+    - key: demo.resource-action-operator/enabled
+      to: "true"
+
+job:
+  image:
+    registry: registry.example.com
+    repository: platform/bash-runner
+    tag: 1.2.3
+
+  interpreterCommand:
+    - /bin/bash
+    - -c
+
+  script: |
+    echo "deployment created"
+    ls -la /opt/scripts || true
+
+  volumes:
+    - name: scripts
+      configMap:
+        name: job-scripts
+
+  volumeMounts:
+    - name: scripts
+      mountPath: /opt/scripts
+
+  serviceAccount:
+    create: true
+    name: restricted-runner
+
+  allowRunAsRoot: false
+  automountServiceAccountToken: false
+  timeout: 30s
+  logTailLines: 20
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0

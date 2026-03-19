@@ -1,0 +1,68 @@
+= URL Safety Policy
+:page-title: URL Safety Policy
+
+`ResourceAction` HTTP targets are protected by a runtime URL safety policy.
+
+== Default Protection
+
+By default, actions are blocked if the target host is:
+
+- loopback/local (`localhost`, `127.0.0.1`, `::1`)
+- private or link-local IPs
+- metadata endpoints (for example `169.254.169.254`, `metadata.google.internal`)
+
+This is enforced even when no explicit `urlPolicy` is configured.
+
+== Configure Allowlist / Blocklist
+
+[source,yaml]
+----
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: deployment-webhook
+  namespace: default
+spec:
+  selector:
+    group: apps
+    version: v1
+    kind: Deployment
+  events: [Create]
+  actions:
+    - type: http
+      mode: once
+      method: POST
+      url: https://api.example.com/hook
+      urlPolicy:
+        allowedHostRegex:
+          - "^api\\.example\\.com$"
+        blockedHostRegex:
+          - "^blocked\\.example\\.com$"
+----
+
+== Local Testing Override
+
+For local test environments only, you can explicitly allow local targets:
+
+[source,yaml]
+----
+actions:
+  - type: http
+    mode: once
+    url: http://127.0.0.1:8080/hook
+    urlPolicy:
+      allowUnsafeLocalTargets: true
+----
+
+Use this override only in controlled development environments.
+
+== Admission Validation
+
+`ResourceAction` webhook validation is implemented (`ValidateCreate` / `ValidateUpdate`) and reuses the same spec validation logic.
+
+Generated webhook manifests:
+
+- `config/webhook/manifests.yaml`
+- `config/webhook/service.yaml`
+
+Note: full admission enforcement in cluster depends on webhook TLS/certificate wiring (for example cert-manager injection) and enabling the webhook package in your deployment kustomization.

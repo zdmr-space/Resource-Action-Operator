@@ -10,8 +10,10 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -33,6 +35,16 @@ type HTTPExecutor struct {
 	rng *rand.Rand
 }
 
+type HTTPExecutionMetrics struct {
+	Attempts          int
+	StatusCode        int
+	NetworkRetryCount int
+	StatusRetryCount  int
+	BackoffMillis     int64
+	DurationMillis    int64
+	Job               *opsv1alpha1.JobExecutionRecord
+}
+
 func NewHTTPExecutor(k8s client.Client) *HTTPExecutor {
 	return &HTTPExecutor{
 		k8s: k8s,
@@ -47,7 +59,20 @@ func (h *HTTPExecutor) Execute(
 	obj *unstructured.Unstructured,
 	headers map[string]string,
 ) error {
+	_, err := h.ExecuteWithMetrics(ctx, action, raNamespace, obj, headers)
+	return err
+}
+
+func (h *HTTPExecutor) ExecuteWithMetrics(
+	ctx context.Context,
+	action opsv1alpha1.ActionSpec,
+	raNamespace string,
+	obj *unstructured.Unstructured,
+	headers map[string]string,
+) (HTTPExecutionMetrics, error) {
 	logger := log.FromContext(ctx)
+	startedAt := time.Now()
+	metrics := HTTPExecutionMetrics{}
 
 	timeout := parseDurationDefault(action.Timeout, 10*time.Second)
 
@@ -77,7 +102,7 @@ func (h *HTTPExecutor) Execute(
 
 	transport, err := h.buildTransport(ctx, raNamespace, action.TLS)
 	if err != nil {
-		return err
+		return metrics, err
 	}
 
 	httpClient := &http.Client{
@@ -89,14 +114,14 @@ func (h *HTTPExecutor) Execute(
 	if action.Body != nil && action.Body.Template != "" {
 		tpl, err := template.New("body").Parse(action.Body.Template)
 		if err != nil {
-			return err
+			return metrics, err
 		}
 
 		var buf bytes.Buffer
 
 		err = tpl.Execute(&buf, obj.Object)
 		if err != nil {
-			return err
+			return metrics, err
 		}
 
 		bodyBytes = buf.Bytes()
@@ -114,12 +139,15 @@ func (h *HTTPExecutor) Execute(
 
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		return fmt.Errorf("invalid expectedStatus regex: %w", err)
+		return metrics, fmt.Errorf("invalid expectedStatus regex: %w", err)
+	}
+	if err := validateTargetURL(action.URL, action.URLPolicy); err != nil {
+		return metrics, err
 	}
 
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		reqCtx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
+		metrics.Attempts = attempt
 
 		var bodyReader io.Reader
 		if len(bodyBytes) > 0 {
@@ -128,7 +156,9 @@ func (h *HTTPExecutor) Execute(
 
 		req, err := http.NewRequestWithContext(reqCtx, method, action.URL, bodyReader)
 		if err != nil {
-			return err
+			cancel()
+			metrics.DurationMillis = time.Since(startedAt).Milliseconds()
+			return metrics, err
 		}
 
 		for k, v := range headers {
@@ -139,10 +169,13 @@ func (h *HTTPExecutor) Execute(
 		}
 
 		resp, err := httpClient.Do(req)
+		cancel()
 		if err != nil {
 			// network error?
 			if retryOnNetwork && attempt < maxAttempts && isRetryableNetErr(err) {
 				sleep := backoffSleep(h.rng, backoffBase, maxBackoff, attempt)
+				metrics.NetworkRetryCount++
+				metrics.BackoffMillis += sleep.Milliseconds()
 				logger.Info("HTTP retry (network error)",
 					"url", action.URL,
 					"attempt", attempt,
@@ -152,11 +185,13 @@ func (h *HTTPExecutor) Execute(
 				time.Sleep(sleep)
 				continue
 			}
-			return err
+			metrics.DurationMillis = time.Since(startedAt).Milliseconds()
+			return metrics, err
 		}
 
 		respBody, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
+		metrics.StatusCode = resp.StatusCode
 
 		logger.Info("HTTP action executed",
 			"url", action.URL,
@@ -167,12 +202,15 @@ func (h *HTTPExecutor) Execute(
 
 		statusStr := strconv.Itoa(resp.StatusCode)
 		if re.MatchString(statusStr) {
-			return nil
+			metrics.DurationMillis = time.Since(startedAt).Milliseconds()
+			return metrics, nil
 		}
 
 		// retry on configured status codes
 		if retryOnStatus[resp.StatusCode] && attempt < maxAttempts {
 			sleep := backoffSleep(h.rng, backoffBase, maxBackoff, attempt)
+			metrics.StatusRetryCount++
+			metrics.BackoffMillis += sleep.Milliseconds()
 			logger.Info("HTTP retry (status)",
 				"url", action.URL,
 				"status", resp.StatusCode,
@@ -184,10 +222,12 @@ func (h *HTTPExecutor) Execute(
 		}
 
 		// final error
-		return fmt.Errorf("http call failed: status=%d body=%s", resp.StatusCode, string(respBody))
+		metrics.DurationMillis = time.Since(startedAt).Milliseconds()
+		return metrics, fmt.Errorf("http call failed: status=%d body=%s", resp.StatusCode, string(respBody))
 	}
 
-	return fmt.Errorf("http call failed after %d attempts", maxAttempts)
+	metrics.DurationMillis = time.Since(startedAt).Milliseconds()
+	return metrics, fmt.Errorf("http call failed after %d attempts", maxAttempts)
 }
 
 func (h *HTTPExecutor) buildTransport(ctx context.Context, raNamespace string, tlsSpec *opsv1alpha1.TLSSpec) (*http.Transport, error) {
@@ -296,9 +336,9 @@ func backoffSleep(rng *rand.Rand, base, max time.Duration, attempt int) time.Dur
 }
 
 func isRetryableNetErr(err error) bool {
-	// very pragmatic: timeout / temporary / connection resets
+	// very pragmatic: timeout / connection resets
 	if nerr, ok := err.(net.Error); ok {
-		if nerr.Timeout() || nerr.Temporary() {
+		if nerr.Timeout() {
 			return true
 		}
 	}
@@ -306,4 +346,76 @@ func isRetryableNetErr(err error) bool {
 	msg := err.Error()
 	re := regexp.MustCompile(`(?i)connection reset|broken pipe|EOF|i/o timeout|tls handshake timeout`)
 	return re.MatchString(msg)
+}
+
+func validateTargetURL(rawURL string, policy *opsv1alpha1.URLPolicySpec) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid action URL: %w", err)
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "" {
+		return fmt.Errorf("invalid action URL: host is empty")
+	}
+
+	if (policy == nil || !policy.AllowUnsafeLocalTargets) && isDefaultBlockedHost(host) {
+		return fmt.Errorf("action URL host %q is blocked by default safety policy", host)
+	}
+
+	if policy == nil {
+		return nil
+	}
+
+	if len(policy.BlockedHostRegex) > 0 {
+		blocked, err := matchAnyRegex(policy.BlockedHostRegex, host)
+		if err != nil {
+			return err
+		}
+		if blocked {
+			return fmt.Errorf("action URL host %q is blocked by urlPolicy.blockedHostRegex", host)
+		}
+	}
+
+	if len(policy.AllowedHostRegex) > 0 {
+		allowed, err := matchAnyRegex(policy.AllowedHostRegex, host)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return fmt.Errorf("action URL host %q is not allowed by urlPolicy.allowedHostRegex", host)
+		}
+	}
+
+	return nil
+}
+
+func matchAnyRegex(patterns []string, value string) (bool, error) {
+	for _, p := range patterns {
+		re, err := regexp.Compile(p)
+		if err != nil {
+			return false, fmt.Errorf("invalid urlPolicy regex %q: %w", p, err)
+		}
+		if re.MatchString(value) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func isDefaultBlockedHost(host string) bool {
+	if host == "localhost" ||
+		host == "0.0.0.0" ||
+		host == "127.0.0.1" ||
+		host == "::1" ||
+		host == "169.254.169.254" ||
+		host == "metadata.google.internal" ||
+		host == "metadata" {
+		return true
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate()
+	}
+
+	return false
 }

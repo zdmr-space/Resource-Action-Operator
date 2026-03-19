@@ -1,0 +1,61 @@
+nameOverride: ""
+fullnameOverride: ""
+
+resourceAction:
+  create: true
+  name: ""
+  namespace: ""
+
+selector:
+  group: apps
+  version: v1
+  kind: Deployment
+
+events:
+  - Create
+
+filters: {}
+# Examples:
+# filters:
+#   labels:
+#     demo.resource-action-operator/enabled: "true"
+#   labelChanges:
+#     - key: demo.resource-action-operator/enabled
+#       to: "true"
+
+job:
+  mode: once
+  schedule: ""
+
+  image:
+    registry: ""
+    repository: bash
+    tag: "5.2"
+    digest: ""
+
+  interpreterCommand:
+    - /bin/bash
+    - -c
+
+  script: |
+    echo "deployment created"
+
+  command: []
+  args: []
+
+  env: []
+  volumes: []
+  volumeMounts: []
+  allowRunAsRoot: false
+
+  serviceAccount:
+    create: false
+    name: ""
+    annotations: {}
+
+  automountServiceAccountToken: false
+  timeout: 30s
+  logTailLines: 20
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  resources: {}

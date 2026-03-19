@@ -1,0 +1,60 @@
+replicaCount: 1
+
+image:
+  registry: ghcr.io
+  repository: zdmr-space/resource-action-operator
+  tag: 0.2.0-rc9
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+rbac:
+  extraClusterRules: []
+  extraRules: []
+
+leaderElection: true
+healthProbeBindAddress: ":8081"
+metrics:
+  enabled: true
+  bindAddress: ":8443"
+  secure: true
+  service:
+    port: 8443
+
+webhook:
+  enabled: false
+  servicePort: 443
+  targetPort: 9443
+  path: /validate-ops-yusaozdemir-de-v1alpha1-resourceaction
+  failurePolicy: Fail
+  # If certManager.enabled=false, you can set a PEM CA bundle (base64) for admission client trust.
+  caBundle: ""
+  certSecretName: webhook-server-cert
+  certMountPath: /tmp/k8s-webhook-server/serving-certs
+
+  certManager:
+    enabled: false
+    issuerName: selfsigned-issuer
+    certificateName: serving-cert

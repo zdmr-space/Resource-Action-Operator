@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: resourceactions.ops.yusaozdemir.de
 spec:
   group: ops.yusaozdemir.de
@@ -74,22 +74,129 @@ spec:
                       - once
                       - cron
                       type: string
+                    job:
+                      properties:
+                        args:
+                          items:
+                            type: string
+                          type: array
+                        automountServiceAccountToken:
+                          default: false
+                          type: boolean
+                        allowRunAsRoot:
+                          default: false
+                          type: boolean
+                        backoffLimit:
+                          format: int32
+                          type: integer
+                        command:
+                          items:
+                            type: string
+                          type: array
+                        env:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                              valueFrom:
+                                properties:
+                                  secretKeyRef:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        type: string
+                                    required:
+                                    - key
+                                    - name
+                                    type: object
+                                type: object
+                            required:
+                            - name
+                            type: object
+                          type: array
+                        image:
+                          type: string
+                        interpreterCommand:
+                          items:
+                            type: string
+                          type: array
+                        logTailLines:
+                          default: 0
+                          format: int32
+                          type: integer
+                        resources:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        script:
+                          type: string
+                        serviceAccountName:
+                          type: string
+                        timeout:
+                          default: 30s
+                          type: string
+                        ttlSecondsAfterFinished:
+                          format: int32
+                          type: integer
+                        volumeMounts:
+                          items:
+                            properties:
+                              mountPath:
+                                type: string
+                              name:
+                                type: string
+                              readOnly:
+                                default: true
+                                type: boolean
+                            required:
+                            - mountPath
+                            - name
+                            type: object
+                          type: array
+                        volumes:
+                          items:
+                            properties:
+                              configMap:
+                                properties:
+                                  name:
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              name:
+                                type: string
+                              secret:
+                                properties:
+                                  secretName:
+                                    type: string
+                                required:
+                                - secretName
+                                type: object
+                            required:
+                            - name
+                            type: object
+                          type: array
+                      required:
+                      - image
+                      type: object
                     retry:
                       properties:
                         backoff:
                           default: 500ms
-                          description: Basis Backoff, z.B. "500ms"
+                          description: Base backoff, for example "500ms".
                           type: string
                         maxAttempts:
                           default: 1
                           type: integer
                         maxBackoff:
                           default: 10s
-                          description: Max Backoff, z.B. "10s"
+                          description: Max backoff, for example "10s".
                           type: string
                         retryOnNetworkError:
                           default: true
-                          description: Retry bei Netzwerkfehlern
+                          description: Retry on network errors.
                           type: boolean
                         retryOnStatus:
                           default:
@@ -98,7 +205,7 @@ spec:
                           - 502
                           - 503
                           - 504
-                          description: Statuscodes die retrybar sind
+                          description: Status codes that should be retried.
                           items:
                             type: integer
                           type: array
@@ -111,7 +218,8 @@ spec:
                     tls:
                       properties:
                         caSecretRef:
-                          description: 'CA Bundle aus Secret (PEM), default key: ca.crt'
+                          description: 'CA bundle from a secret (PEM), default key:
+                            ca.crt.'
                           properties:
                             key:
                               type: string
@@ -122,8 +230,8 @@ spec:
                           - name
                           type: object
                         clientCertSecretRef:
-                          description: 'mTLS Client Cert/Key aus Secret, default keys:
-                            tls.crt/tls.key'
+                          description: 'mTLS client cert/key from secret, default
+                            keys: tls.crt/tls.key.'
                           properties:
                             certKey:
                               default: tls.crt
@@ -138,18 +246,32 @@ spec:
                           type: object
                         insecureSkipVerify:
                           default: false
-                          description: HTTPS verify deaktivieren (dev)
+                          description: Disable HTTPS verification (development only).
                           type: boolean
                         serverName:
-                          description: 'Optional: SNI/ServerName'
+                          description: Optional SNI/server name override.
                           type: string
                       type: object
                     type:
                       enum:
                       - http
+                      - job
                       type: string
                     url:
                       type: string
+                    urlPolicy:
+                      properties:
+                        allowUnsafeLocalTargets:
+                          type: boolean
+                        allowedHostRegex:
+                          items:
+                            type: string
+                          type: array
+                        blockedHostRegex:
+                          items:
+                            type: string
+                          type: array
+                      type: object
                   required:
                   - type
                   type: object
@@ -160,6 +282,21 @@ spec:
                 type: array
               filters:
                 properties:
+                  labelChanges:
+                    items:
+                      properties:
+                        from:
+                          description: Leave empty to require the label to be absent before the update. Use "*" to match any previous value.
+                          type: string
+                        key:
+                          type: string
+                        to:
+                          description: Leave empty to require the label to be absent after the update. Use "*" to match any new value.
+                          type: string
+                      required:
+                      - key
+                      type: object
+                    type: array
                   labels:
                     additionalProperties:
                       type: string
@@ -248,13 +385,55 @@ spec:
               executions:
                 items:
                   properties:
+                    actionCount:
+                      type: integer
+                    attempts:
+                      type: integer
+                    backoffMillis:
+                      format: int64
+                      type: integer
+                    durationMillis:
+                      format: int64
+                      type: integer
                     event:
                       type: string
                     executedAt:
                       format: date-time
                       type: string
+                    lastHttpStatus:
+                      type: integer
+                    job:
+                      properties:
+                        completedAt:
+                          format: date-time
+                          type: string
+                        exitCode:
+                          format: int32
+                          type: integer
+                        logTail:
+                          items:
+                            type: string
+                          type: array
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                        podName:
+                          type: string
+                        startedAt:
+                          format: date-time
+                          type: string
+                        status:
+                          type: string
+                      type: object
+                    networkRetryCount:
+                      type: integer
                     resourceUID:
                       type: string
+                    retryCount:
+                      type: integer
+                    statusRetryCount:
+                      type: integer
                   required:
                   - event
                   - executedAt

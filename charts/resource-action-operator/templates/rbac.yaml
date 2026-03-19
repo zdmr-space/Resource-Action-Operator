@@ -1,0 +1,106 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "manager-role") }}
+  labels:
+    {{- include "rao.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["ops.yusaozdemir.de"]
+    resources: ["resourceactions"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["ops.yusaozdemir.de"]
+    resources: ["resourceactions/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["ops.yusaozdemir.de"]
+    resources: ["resourceactions/finalizers"]
+    verbs: ["update"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch", "update"]
+  {{- with .Values.rbac.extraClusterRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "manager-rolebinding") }}
+  labels:
+    {{- include "rao.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "manager-role") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "rao.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "leader-election-role") }}
+  labels:
+    {{- include "rao.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  {{- with .Values.rbac.extraRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "leader-election-rolebinding") }}
+  labels:
+    {{- include "rao.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "leader-election-role") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "rao.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if .Values.metrics.secure }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "metrics-auth-role") }}
+  labels:
+    {{- include "rao.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["authentication.k8s.io"]
+    resources: ["tokenreviews"]
+    verbs: ["create"]
+  - apiGroups: ["authorization.k8s.io"]
+    resources: ["subjectaccessreviews"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "metrics-auth-rolebinding") }}
+  labels:
+    {{- include "rao.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "metrics-auth-role") }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "rao.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

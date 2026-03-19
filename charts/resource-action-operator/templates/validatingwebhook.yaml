@@ -1,0 +1,30 @@
+{{- if .Values.webhook.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "validating-webhook-configuration") }}
+  labels:
+    {{- include "rao.labels" . | nindent 4 }}
+  {{- if .Values.webhook.certManager.enabled }}
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ .Values.webhook.certManager.certificateName }}
+  {{- end }}
+webhooks:
+  - name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "admission") }}.ops.yusaozdemir.de
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    clientConfig:
+      service:
+        name: {{ include "rao.fullnameWithSuffix" (dict "context" . "suffix" "webhook-service") }}
+        namespace: {{ .Release.Namespace }}
+        path: {{ .Values.webhook.path }}
+      {{- if and (not .Values.webhook.certManager.enabled) .Values.webhook.caBundle }}
+      caBundle: {{ .Values.webhook.caBundle | quote }}
+      {{- end }}
+    rules:
+      - apiGroups: ["ops.yusaozdemir.de"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["resourceactions"]
+{{- end }}

@@ -1,0 +1,44 @@
+= Operator ToDo
+:page-title: ToDo
+
+Priority backlog for making the operator production-ready.
+
+== P0 In Progress
+
+- [ ] URL safety policy
+* [x] add allowlist/blocklist controls for outbound action URLs
+* [x] block localhost and metadata endpoints by default
+* [x] validate and enforce policy at runtime
+* [x] add unit tests
+* [x] add reconcile-time spec validation + `SpecValid` condition
+* [ ] fully enable admission webhook in deployment (TLS/cert-manager wiring)
+
+== P1 Next
+
+- [ ] Admission validation webhook
+* reject invalid `ResourceAction` specs before runtime
+* validate mode/schedule/regex/TLS references
+
+- [ ] Correct `once` semantics at action level
+* dedupe by `uid + event + action`
+* avoid skipping all actions when only one already executed
+
+- [ ] Retry and circuit breaker controls
+* cap repeated failures per target
+* cooldown windows and max in-flight per action
+
+== P2 Important
+
+- [ ] Multi-tenant hardening
+* stricter secret and namespace boundaries
+* optional per-namespace quotas
+
+- [ ] Better status model
+* per-action summaries (last N)
+* clearer failure classification
+
+- [ ] Dead-letter/fallback hooks
+* on terminal failure, emit to fallback endpoint/topic/event
+
+- [ ] E2E conformance matrix
+* deterministic tests for create/update/delete, TLS/mTLS, retries, failures

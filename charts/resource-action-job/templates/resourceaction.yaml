@@ -1,0 +1,70 @@
+{{- if .Values.resourceAction.create }}
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: {{ include "raj.resourceActionName" . }}
+  namespace: {{ default .Release.Namespace .Values.resourceAction.namespace }}
+  labels:
+    {{- include "raj.labels" . | nindent 4 }}
+spec:
+  selector:
+    group: {{ .Values.selector.group | quote }}
+    version: {{ .Values.selector.version | quote }}
+    kind: {{ .Values.selector.kind | quote }}
+  events:
+    {{- toYaml .Values.events | nindent 4 }}
+  {{- with .Values.filters }}
+  filters:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  actions:
+    - type: job
+      mode: {{ .Values.job.mode | quote }}
+      {{- if .Values.job.schedule }}
+      schedule: {{ .Values.job.schedule | quote }}
+      {{- end }}
+      job:
+        image: {{ include "raj.jobImage" . | quote }}
+        {{- if .Values.job.script }}
+        script: |
+{{ .Values.job.script | nindent 10 }}
+        {{- end }}
+        {{- with .Values.job.interpreterCommand }}
+        interpreterCommand:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.job.command }}
+        command:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.job.args }}
+        args:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.job.env }}
+        env:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.job.volumes }}
+        volumes:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.job.volumeMounts }}
+        volumeMounts:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        allowRunAsRoot: {{ .Values.job.allowRunAsRoot }}
+        {{- $saName := include "raj.serviceAccountName" . }}
+        {{- if $saName }}
+        serviceAccountName: {{ $saName | quote }}
+        {{- end }}
+        automountServiceAccountToken: {{ .Values.job.automountServiceAccountToken }}
+        timeout: {{ .Values.job.timeout | quote }}
+        logTailLines: {{ .Values.job.logTailLines }}
+        ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+        backoffLimit: {{ .Values.job.backoffLimit }}
+        {{- with .Values.job.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+{{- end }}

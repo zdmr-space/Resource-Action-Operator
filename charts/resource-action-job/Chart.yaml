@@ -1,0 +1,16 @@
+apiVersion: v2
+name: resource-action-job
+description: Helm chart for creating ResourceAction job actions
+type: application
+version: 0.2.0-rc9
+appVersion: "0.2.0-rc9"
+keywords:
+  - kubernetes
+  - resourceaction
+  - jobs
+  - automation
+home: https://github.com/zdmr-space/Resource-Action-Operator
+sources:
+  - https://github.com/zdmr-space/Resource-Action-Operator
+maintainers:
+  - name: Resource Action Operator Maintainers

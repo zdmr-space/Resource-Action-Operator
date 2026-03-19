@@ -1,0 +1,68 @@
+nameOverride: ""
+fullnameOverride: ""
+
+resourceAction:
+  create: true
+  name: ""
+  namespace: ""
+
+selector:
+  group: apps
+  version: v1
+  kind: Deployment
+
+events:
+  - Create
+
+filters: {}
+
+action:
+  type: http
+  mode: once
+  schedule: ""
+
+http:
+  method: POST
+  url: https://example.internal/hook
+  headers: {}
+  body:
+    template: |
+      {"name":"{{ .metadata.name }}"}
+  expectedStatus: "^2..$"
+  timeout: 10s
+  retry: {}
+  tls: {}
+  urlPolicy: {}
+
+job:
+  image:
+    registry: ""
+    repository: bash
+    tag: "5.2"
+    digest: ""
+
+  interpreterCommand:
+    - /bin/bash
+    - -c
+
+  script: |
+    echo "deployment created"
+
+  command: []
+  args: []
+  env: []
+  volumes: []
+  volumeMounts: []
+
+  serviceAccount:
+    create: false
+    name: ""
+    annotations: {}
+
+  allowRunAsRoot: false
+  automountServiceAccountToken: false
+  timeout: 30s
+  logTailLines: 20
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  resources: {}

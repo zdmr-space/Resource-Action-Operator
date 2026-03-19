@@ -1,0 +1,23 @@
+replicaCount: 2
+
+image:
+  registry: registry.example.com
+  repository: platform/resource-action-operator
+  tag: 0.2.0-rc9
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: registry-credentials
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+webhook:
+  enabled: true
+  certManager:
+    enabled: true
