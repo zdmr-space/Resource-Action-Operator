@@ -41,6 +41,7 @@ type Engine struct {
 	disco discovery.DiscoveryInterface
 
 	factory dynamicinformer.DynamicSharedInformerFactory
+	runCtx  context.Context
 
 	mu        sync.Mutex
 	started   bool
@@ -59,6 +60,7 @@ func NewEngine(c client.Client) *Engine {
 		client:     c,
 		executor:   exec, // Interface
 		cronEngine: cron,
+		runCtx:     context.Background(),
 		informers:  make(map[schema.GroupVersionResource]cache.SharedIndexInformer),
 	}
 }
@@ -90,6 +92,7 @@ func New(cfg *rest.Config, executor Executor) (*Engine, error) {
 		executor:   executor,
 		cronEngine: cron,
 		factory:    factory,
+		runCtx:     context.Background(),
 		informers:  make(map[schema.GroupVersionResource]cache.SharedIndexInformer),
 	}, nil
 }
@@ -178,8 +181,10 @@ func (e *Engine) EnsureWatching(ctx context.Context, gvk schema.GroupVersionKind
 	// Start factory once.
 	if !e.started {
 		e.started = true
-		e.cronEngine.Start(ctx)
-		go e.factory.Start(ctx.Done())
+		e.cronEngine.Start(e.runCtx)
+		go e.factory.Start(e.runCtx.Done())
+	} else {
+		go inf.Run(e.runCtx.Done())
 	}
 
 	return nil
