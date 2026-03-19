@@ -244,14 +244,14 @@ type ExecutionRecord struct {
 	Event       string      `json:"event"`
 	ExecutedAt  metav1.Time `json:"executedAt"`
 
-	ActionCount       int   `json:"actionCount,omitempty"`
-	Attempts          int   `json:"attempts,omitempty"`
-	RetryCount        int   `json:"retryCount,omitempty"`
-	NetworkRetryCount int   `json:"networkRetryCount,omitempty"`
-	StatusRetryCount  int   `json:"statusRetryCount,omitempty"`
-	BackoffMillis     int64 `json:"backoffMillis,omitempty"`
-	DurationMillis    int64 `json:"durationMillis,omitempty"`
-	LastHTTPStatus    int   `json:"lastHttpStatus,omitempty"`
+	ActionCount       int                 `json:"actionCount,omitempty"`
+	Attempts          int                 `json:"attempts,omitempty"`
+	RetryCount        int                 `json:"retryCount,omitempty"`
+	NetworkRetryCount int                 `json:"networkRetryCount,omitempty"`
+	StatusRetryCount  int                 `json:"statusRetryCount,omitempty"`
+	BackoffMillis     int64               `json:"backoffMillis,omitempty"`
+	DurationMillis    int64               `json:"durationMillis,omitempty"`
+	LastHTTPStatus    int                 `json:"lastHttpStatus,omitempty"`
 	Job               *JobExecutionRecord `json:"job,omitempty"`
 }
 

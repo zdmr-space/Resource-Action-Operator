@@ -25,9 +25,9 @@ const (
 )
 
 type MatchInput struct {
-	Event EventType
-	GVK   schema.GroupVersionKind
-	Obj   *unstructured.Unstructured
+	Event  EventType
+	GVK    schema.GroupVersionKind
+	Obj    *unstructured.Unstructured
 	OldObj *unstructured.Unstructured
 }
 
