@@ -2,8 +2,8 @@ apiVersion: v2
 name: resource-action-operator
 description: Kubernetes operator for event-driven HTTP and Job actions on Kubernetes resources
 type: application
-version: 0.2.0-rc7
-appVersion: "0.2.0-rc7"
+version: 0.2.0-rc8
+appVersion: "0.2.0-rc8"
 keywords:
   - kubernetes
   - operator
