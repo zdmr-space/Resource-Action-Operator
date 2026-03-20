@@ -11,7 +11,7 @@ content:
 
 ui:
   bundle:
-    url: https://gitlab.com/antora/default-ui/-/jobs/artifacts/master/raw/build/ui-bundle.zip?job=build
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/HEAD/raw/build/ui-bundle.zip?job=bundle-stable
     snapshot: true
 
 output:
