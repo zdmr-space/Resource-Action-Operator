@@ -1,0 +1,18 @@
+site:
+  title: Resource Action Operator
+  url: https://zdmr-space.github.io/Resource-Action-Operator
+  start_page: resource-action-operator::index.adoc
+
+content:
+  sources:
+    - url: .
+      branches: HEAD
+      start_path: docs
+
+ui:
+  bundle:
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/HEAD/raw/build/ui-bundle.zip?job=bundle-stable
+    snapshot: true
+
+output:
+  dir: ./build/site

@@ -1,0 +1,30 @@
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: node-label-update-http
+  namespace: default
+spec:
+  selector:
+    group: ""
+    version: v1
+    kind: Node
+  events:
+    - Update
+  filters:
+    labelChanges:
+      - key: demo.resource-action-operator/enabled
+        to: "true"
+  actions:
+    - type: http
+      mode: once
+      method: POST
+      url: https://example.internal/hooks/node-label-update
+      expectedStatus: "^2..$"
+      timeout: 10s
+      body:
+        template: |
+          {
+            "event": "node-label-update",
+            "node": "{{ .metadata.name }}",
+            "labels": {{ .metadata.labels | toJson }}
+          }

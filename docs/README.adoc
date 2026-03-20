@@ -21,7 +21,7 @@ docs/
         demo.adoc
 ----
 
-Important pages for recent deployment and demo changes:
+Important pages for deployment, examples, and chart usage:
 
 - `docs/modules/ROOT/pages/index.adoc`
 - `docs/modules/ROOT/pages/quickstart.adoc`
@@ -49,6 +49,14 @@ antora --stacktrace docs-site-playbook.yml
 ----
 
 Note: A minimal Antora component descriptor (`docs/antora.yml`) is already included.
+
+GitHub Pages publishing can use the repository playbook:
+
+- `docs-site-playbook.yml`
+
+The repository workflow for this is:
+
+- `.github/workflows/docs.yml`
 
 == Suggested Next Steps
 

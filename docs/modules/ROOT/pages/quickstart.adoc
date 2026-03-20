@@ -1,15 +1,125 @@
 = Quickstart
 :page-title: Quickstart
 
+This page shows the shortest path to install the operator and deploy a first `ResourceAction` with Helm.
+
+For the full Helm reference including all chart values, see xref:helm.adoc[Helm Deployment].
+
 == Requirements
 
-- Go 1.24+
+For a cluster install:
+
+- Kubernetes cluster
+- `kubectl`
+- Helm `3.15+`
+- `curl`
+
+For local development in this repository:
+
+- Go `1.24+`
 - Docker
-- kubectl
-- Helm 3.15+
 - kind
 
-For full Helm reference, see xref:helm.adoc[Helm Deployment].
+== Install Latest Release From GitHub
+
+The following script:
+
+- fetches the latest GitHub release tag
+- converts `v0.x.y` tags to the matching Helm chart version `0.x.y`
+- installs the operator chart from the published Helm repository
+- installs the CRD automatically through the chart
+
+[source,bash]
+----
+set -euo pipefail
+
+RELEASE_TAG="$(curl -fsSL https://api.github.com/repos/zdmr-space/Resource-Action-Operator/releases/latest \
+  | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' \
+  | head -n1)"
+
+if [ -z "${RELEASE_TAG}" ]; then
+  echo "Could not determine latest GitHub release tag" >&2
+  exit 1
+fi
+
+CHART_VERSION="${RELEASE_TAG#v}"
+
+helm repo add resource-action-operator https://zdmr-space.github.io/Resource-Action-Operator
+helm repo update
+
+helm upgrade --install resource-action-operator resource-action-operator/resource-action-operator \
+  --version "${CHART_VERSION}" \
+  --namespace resource-action-operator-system \
+  --create-namespace
+----
+
+Verify the installation:
+
+[source,bash]
+----
+kubectl get crd resourceactions.ops.yusaozdemir.de
+kubectl -n resource-action-operator-system get pods
+----
+
+Notes:
+
+- The operator chart ships the CRD in `charts/resource-action-operator/crds/`.
+- Helm installs the CRD on chart install.
+- Helm does not remove CRDs automatically on uninstall.
+
+== Deploy A First ResourceAction With Helm
+
+The following example installs a simple HTTP-based `ResourceAction` that watches `Namespace` create events.
+
+[source,bash]
+----
+helm upgrade --install namespace-http resource-action-operator/resource-action \
+  --version "${CHART_VERSION}" \
+  --namespace default \
+  -f - <<'EOF'
+selector:
+  group: ""
+  version: v1
+  kind: Namespace
+
+events:
+  - Create
+
+action:
+  type: http
+  mode: once
+
+http:
+  method: POST
+  url: https://example.internal/hooks/namespaces
+  expectedStatus: "^2..$"
+  body:
+    template: |
+      {
+        "event": "namespace-create",
+        "name": "{{ .metadata.name }}"
+      }
+EOF
+----
+
+Trigger it by creating a namespace:
+
+[source,bash]
+----
+kubectl create namespace demo-quickstart
+----
+
+== Example Manifests
+
+This repository also contains ready-to-read manifest examples in `examples/`.
+
+Useful starting points:
+
+- `examples/resourceaction-default.yaml`
+- `examples/resourceaction-job-bash.yaml`
+- `examples/rbac/node-watcher-rbac.yaml`
+- `examples/node-label-update-http/resourceaction.yaml`
+- `examples/job-ubuntu-secret/resourceaction.yaml`
 
 == Run Local Tests
 
@@ -18,100 +128,45 @@ For full Helm reference, see xref:helm.adoc[Helm Deployment].
 make test
 ----
 
-== Apply Example ResourceActions
-
-HTTP/HTTPS example:
-
-[source,bash]
-----
-kubectl apply -f template-files/resourceaction-default.yaml
-----
-
-Job action example:
-
-[source,bash]
-----
-kubectl apply -f template-files/resourceaction-job-bash.yaml
-----
-
-== Run Operator Locally
+== Run The Operator Locally
 
 [source,bash]
 ----
 make run
 ----
 
-== Deploy To Cluster (Helm)
+== Deploy From The Local Checkout
+
+Install the local operator chart:
 
 [source,bash]
 ----
-make helm-install
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace
 ----
 
-Enable admission webhook with cert-manager:
-
-[source,bash]
-----
-make helm-install-webhook
-----
-
-Render manifests before install:
-
-[source,bash]
-----
-make helm-template
-----
-
-Validate chart:
-
-[source,bash]
-----
-make helm-lint
-----
-
-Uninstall:
-
-[source,bash]
-----
-make helm-uninstall
-----
-
-Use a custom image:
+Enable the admission webhook with cert-manager:
 
 [source,bash]
 ----
 helm upgrade --install resource-action-operator charts/resource-action-operator \
   --namespace resource-action-operator-system \
   --create-namespace \
-  --set image.repository=<repo/image> \
-  --set image.tag=<tag> \
-  --set image.pullPolicy=IfNotPresent
+  --set webhook.enabled=true \
+  --set webhook.certManager.enabled=true
 ----
 
-== Deploy To Cluster (Kustomize, optional)
+Deploy with Kustomize instead of Helm:
 
 [source,bash]
 ----
 make deploy IMG=<image>
 ----
 
-Deploy with admission webhook and cert-manager:
+Deploy with webhook support:
 
 [source,bash]
 ----
 make deploy-webhook IMG=<image>
 ----
-
-Notes:
-
-- `make deploy` does not require cert-manager.
-- `make deploy-webhook` requires cert-manager installed in the cluster.
-- `make helm-install` does not require cert-manager.
-- `make helm-install-webhook` requires cert-manager installed in the cluster.
-
-Helm values relevant for deployment mode:
-
-- `webhook.enabled=false` by default
-- `webhook.certManager.enabled=false` by default
-- enable webhook mode with `webhook.enabled=true`
-- enable cert-manager resources with `webhook.certManager.enabled=true`

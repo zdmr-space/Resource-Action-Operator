@@ -1,0 +1,41 @@
+resourceAction:
+  name: node-env-demo-rao-job
+  namespace: default
+
+selector:
+  group: ""
+  version: v1
+  kind: Node
+
+events:
+  - Update
+
+filters:
+  labels:
+    env: demo-rao
+
+job:
+  mode: once
+
+  image:
+    registry: ""
+    repository: ubuntu
+    tag: "24.04"
+    digest: ""
+
+  interpreterCommand:
+    - /bin/sh
+    - -c
+
+  script: |
+    echo "resource-action job started"
+    echo "matching node update detected"
+    sleep 15
+    echo "resource-action job finished"
+
+  allowRunAsRoot: true
+  automountServiceAccountToken: false
+  timeout: 60s
+  logTailLines: 20
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0

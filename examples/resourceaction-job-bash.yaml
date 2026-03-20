@@ -1,0 +1,34 @@
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: deployment-job-action
+  namespace: default
+spec:
+  selector:
+    group: apps
+    version: v1
+    kind: Deployment
+  events:
+    - Create
+  actions:
+    - type: job
+      mode: once
+      job:
+        image: bash:5.2
+        interpreterCommand:
+          - /bin/bash
+          - -c
+        script: |
+          echo "deployment created"
+          ls -la /opt/scripts || true
+        volumes:
+          - name: scripts
+            configMap:
+              name: job-scripts
+        volumeMounts:
+          - name: scripts
+            mountPath: /opt/scripts
+        serviceAccountName: restricted-runner
+        automountServiceAccountToken: false
+        timeout: 30s
+        ttlSecondsAfterFinished: 300

@@ -1,46 +1,88 @@
 # Resource Action Operator
 
-![Kubernetes](https://img.shields.io/badge/kubernetes-operator-blue)
-![Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-green)
-![Status](https://img.shields.io/badge/status-v0.1.0--alpha-orange)
+Kubernetes operator for reacting to resource events and executing follow-up actions.
 
-**Repository:** [https://github.com/zdmr-space/resource-action-operator](https://github.com/zdmr-space/resource-action-operator)
+The operator watches Kubernetes resources such as `Deployment`, `Namespace`, or `Node` and triggers either:
 
-- reacts to `Create`, `Update`, `Delete`
-- filters by GVK, name/namespace regex, current labels, and label transitions on `Update`
-- executes HTTP calls with retries, timeouts, and expected status matching
-- creates Kubernetes Jobs for script/container-based actions
-- persists richer Job execution details including job name, pod name, status, exit code, and optional log tail
-- supports TLS/mTLS via Kubernetes secrets
-- supports URL safety policy (allow/block regex, default local/metadata protection)
-- stores execution history, retry/backoff metrics, and conditions in `status`
-- emits Kubernetes Events for action success/failure summaries
+- HTTP requests for webhook and API integrations
+- Kubernetes Jobs for script- or container-based automation
 
-## Overview
+## What It Does
 
-Resource Action Operator is a Kubernetes operator that allows you to execute **HTTP-based actions** in reaction to **Kubernetes resource lifecycle events** (Create / Update / Delete).
+- reacts to `Create`, `Update`, and `Delete`
+- matches resources by GVK plus optional name, namespace, label, and label-transition filters
+- executes HTTP actions with timeout, retries, TLS/mTLS, and expected status validation
+- executes Job actions with user-provided images, scripts, env vars, mounts, and service accounts
+- stores execution state, conditions, and failure details in `status`
+- emits Kubernetes Events for successful and failed runs
 
-It is designed for:
+## Typical Use Cases
 
-* Platform teams
-* Internal automation
-* Webhook-style integrations
-* GitOps-friendly event handling
+- call a webhook when a `Deployment` is created
+- trigger a Job when a label is added to a `Node`
+- start recurring follow-up callbacks after a matching event
+- run cluster-local automation without embedding custom logic into applications
 
-Instead of embedding automation logic into applications, you declaratively describe **what should happen when a resource event occurs**.
+## Requirements
 
----
+- Kubernetes cluster
+- Helm `3.15+` recommended for installation
+- `kubectl`
 
-## Core Concepts
+For local development and demo runs, this repository also uses Go, Docker, and kind.
 
-### ResourceAction (CRD)
+## Install
 
-A `ResourceAction` defines:
+Install from the local chart:
 
-* **Which resource** to observe (GVK selector)
-* **Which events** to react to (Create / Delete)
-* **Optional filters** (name, namespace, labels)
-* **One or more actions** to execute
+```bash
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace
+```
+
+Install from the published chart repository:
+
+```bash
+helm repo add resource-action-operator https://zdmr-space.github.io/Resource-Action-Operator
+helm repo update
+
+helm upgrade --install resource-action-operator resource-action-operator/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace
+```
+
+Enable the admission webhook with cert-manager:
+
+```bash
+helm upgrade --install resource-action-operator charts/resource-action-operator \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  --set webhook.enabled=true \
+  --set webhook.certManager.enabled=true
+```
+
+## First Example
+
+Apply a minimal HTTP-based `ResourceAction`:
+
+```bash
+kubectl apply -f examples/resourceaction-default.yaml
+```
+
+Then create a matching resource, for example:
+
+```bash
+kubectl create namespace demo-test
+```
+
+For more manifest examples, see `examples/`. For reusable Helm-based actions, see `charts/resource-action` and `charts/resource-action-job`.
+
+## Action Types
+
+### `type: http`
+
+Use HTTP actions for webhooks and API calls.
 
 ```yaml
 apiVersion: ops.yusaozdemir.de/v1alpha1
@@ -52,268 +94,136 @@ spec:
   selector:
     group: apps
     version: v1
-    kind: Namespace
+    kind: Deployment
   events:
     - Create
-  filters:
-    nameRegex: "^demo-.*"
   actions:
     - type: http
-      url: https://httpbin.org/post
       method: POST
+      url: https://example.internal/hook
+      expectedStatus: "^2..$"
 ```
 
-HTTP authentication data should be referenced from Secrets, for example via `headers`.
+### `type: job`
 
-## Actions
-
-### HTTP Action
-
-Currently supported action type:
-
-* `http`
-
-Features:
-
-* Custom HTTP method
-* Headers from Secrets
-* JSON body templating
-* Timeout
-* Retry with backoff
-* TLS / mTLS
-* Expected status validation (regex)
-
----
-
-### Body Templating
-
-The request body supports Go templates.
-
-Available fields:
-
-```json
-{
-  "metadata": {
-    "name": "<resource name>",
-    "namespace": "<resource namespace>",
-    "uid": "<resource uid>",
-    "labels": { "key": "value" }
-  }
-}
-```
-
-Example:
+Use Job actions to create a Kubernetes Job from a user-defined image and script.
 
 ```yaml
-body:
-  template: |
-    {
-      "event": "namespace-created",
-      "name": "{{ .metadata.name }}",
-      "uid": "{{ .metadata.uid }}"
-    }
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: deployment-job
+  namespace: default
+spec:
+  selector:
+    group: apps
+    version: v1
+    kind: Deployment
+  events:
+    - Create
+  actions:
+    - type: job
+      mode: once
+      job:
+        image: bash:5.2
+        interpreterCommand:
+          - /bin/bash
+          - -c
+        script: |
+          echo "deployment created"
+        timeout: 30s
 ```
 
-## Label-Based Matching
+Job actions support:
 
-### expectedStatus (Optional)
+- scripts or direct commands
+- environment variables and Secret-backed environment variables
+- Secret and ConfigMap mounts
+- explicit `serviceAccountName`
+- resource limits
+- cleanup via `ttlSecondsAfterFinished`
 
-You can define which HTTP status codes are considered **successful** using a regex.
+## Matching and Filters
+
+The operator selects resources by:
+
+- API group, version, and kind
+- event type: `Create`, `Update`, `Delete`
+- optional `nameRegex`
+- optional `namespaceRegex`
+- optional `filters.labels`
+- optional `filters.labelChanges` for update transitions
+
+Example for matching a `Node` update when a label changes to `true`:
 
 ```yaml
-expectedStatus: "^2..$"   # default
-expectedStatus: "^(4..|5..)$"
+filters:
+  labelChanges:
+    - key: demo.resource-action-operator/enabled
+      to: "true"
 ```
 
-If the response status does not match:
+Cluster-scoped resources such as `Node` require the operator to have watch permissions for that resource type.
 
-* The action is treated as failed
-* Retries may apply
-* Status is updated accordingly
+## Security Notes
 
-- `Deployment`
-- `Service`
-- `Namespace`
-- `Node`
+- treat `ResourceAction` write access as privileged
+- keep Job actions on restricted service accounts
+- store tokens, certificates, and secrets in Kubernetes `Secret` objects
+- grant additional watch permissions explicitly through RBAC
 
-## Retry & Reliability
+## Charts
 
-```yaml
-retry:
-  maxAttempts: 5
-  backoff: 500ms
-  maxBackoff: 10s
-  retryOnStatus:
-    - 429
-    - 500
-```
+This repository contains three Helm charts:
 
-Supports:
+- `charts/resource-action-operator`: installs the operator
+- `charts/resource-action`: creates a generic `ResourceAction`
+- `charts/resource-action-job`: creates a job-focused `ResourceAction`
 
-* Exponential backoff with jitter
-* Retry on network errors
-* Retry on configurable HTTP status codes
+## Repository Layout
 
----
+- `api/v1alpha1`: CRD types, validation, webhook logic
+- `internal/controller`: controller-runtime reconciliation and watches
+- `internal/engine`: execution logic for HTTP and Job actions
+- `charts/`: Helm charts for operator and reusable actions
+- `config/`: generated and deployment manifests
+- `examples/`: standalone example manifests and demo scenarios
+- `docs/`: AsciiDoc documentation
+- `test/`: end-to-end test helpers and suites
 
-## TLS & mTLS
+## Development
 
-```yaml
-tls:
-  insecureSkipVerify: false
-  caSecretRef:
-    name: ca-cert
-    key: ca.pem
-  clientCertSecretRef:
-    name: client-cert
-    certKey: tls.crt
-    keyKey: tls.key
-```
-
-* Uses Kubernetes Secrets
-* Namespaced isolation
-* Supports full mTLS
-
----
-
-## Action Modes
-
-### once (default)
-
-Executed **once per resource UID + event**.
-
-Duplicate executions are prevented.
-
-### cron
-
-```yaml
-mode: cron
-schedule: 30s
-```
-
-* Periodic execution
-* Independent of resource events
-* Useful for heartbeats or sync jobs
-
-Rules:
-
-## Status & Conditions
-
-Each ResourceAction maintains execution history and readiness state.
-
-```yaml
-status:
-  conditions:
-    - type: Ready
-      status: "True"
-      reason: ActionSucceeded
-      message: All actions executed successfully
-  executions:
-    - event: Create
-      resourceUID: <uid>
-      executedAt: <timestamp>
-```
-
-* `Ready=True` → last execution successful
-* `Ready=False` → last execution failed
-
----
-
-## RBAC & Security Model
-
-Security is **namespace-scoped by design**:
-
-* ResourceActions are namespaced
-* Secrets are read only from the same namespace
-* No cross-namespace execution
-* Operator only updates its own CR status
-
-Recommended:
-
-* One operator instance per cluster
-* Use namespaces to isolate teams/projects
-
----
-
-## Installation
-
-### Local Development
+Run tests:
 
 ```bash
-make manifests
+make test
+```
+
+Run the operator locally against the current kube context:
+
+```bash
 make run
 ```
 
-Uses your current kubeconfig.
-
----
-
-### Cluster Deployment
-
-Apply CRD:
+Deploy with Kustomize:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/zdmr-space/resource-action-operator/v0.1.0/config/crd/bases/resourceactions.ops.yusaozdemir.de.yaml
+make deploy IMG=<image>
 ```
 
-Deploy controller (example):
+Deploy with webhook support:
 
 ```bash
-kubectl apply -f config/manager/manager.yaml
+make deploy-webhook IMG=<image>
 ```
 
-Notes:
-- `make deploy` works without cert-manager.
-- `make deploy-webhook` requires cert-manager CRDs/controllers installed.
+## Documentation
 
-## Testing
-
-- CRD/API: `api/v1alpha1`
-- Controller: `internal/controller`
-- Engine/Executor: `internal/engine`
-- Manifests: `config/`
-- Demo setup: `hack/demo/`
-- ResourceAction templates: `template-files/demo/`
-- Job action example: `template-files/resourceaction-job-bash.yaml`
-- Generic ResourceAction chart: `charts/resource-action`
-- Docs (AsciiDoc): `docs/`
-
-kubectl describe resourceaction
-```
-
-AsciiDoc structure is prepared under `docs/`.
-
-## Roadmap
-
-Planned for future releases:
-
-* Helm chart
-* ValidatingAdmissionWebhook
-* URL allowlists
-* Metrics / Prometheus
-* Multi-action chaining
-
-URL policy details and examples:
-
-## Contributing
-
-Contributions are welcome!
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests & documentation
-4. Open a pull request
-
----
+- docs entry point: `docs/README.adoc`
+- quickstart: `docs/modules/ROOT/pages/quickstart.adoc`
+- action details: `docs/modules/ROOT/pages/actions.adoc`
+- Helm usage: `docs/modules/ROOT/pages/helm.adoc`
 
 ## License
 
-Apache License 2.0
-
-Additional Job metrics now include:
-
-## Maintainer
-
-**Batur Yusa Özdemir**
-**Ahmet Taha Özdemir**
-GitHub: [https://github.com/zdmr-space](https://github.com/zdmr-space)
+Apache-2.0

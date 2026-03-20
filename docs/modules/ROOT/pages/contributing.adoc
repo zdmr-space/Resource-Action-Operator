@@ -9,4 +9,5 @@ See the repository contribution guide:
 
 - run `make test`
 - update docs for behavior changes
+- update Helm docs when chart values, defaults, or install flows change
 - keep comments and user-facing text in English

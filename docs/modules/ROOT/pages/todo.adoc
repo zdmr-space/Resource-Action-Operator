@@ -1,44 +1,58 @@
 = Operator ToDo
 :page-title: ToDo
 
-Priority backlog for making the operator production-ready.
+Priority backlog based on the current repository state.
 
-== P0 In Progress
+== Done
 
-- [ ] URL safety policy
-* [x] add allowlist/blocklist controls for outbound action URLs
-* [x] block localhost and metadata endpoints by default
-* [x] validate and enforce policy at runtime
-* [x] add unit tests
-* [x] add reconcile-time spec validation + `SpecValid` condition
-* [ ] fully enable admission webhook in deployment (TLS/cert-manager wiring)
+- [x] URL safety policy
+* [x] allowlist and blocklist controls for outbound action URLs
+* [x] localhost and metadata endpoints blocked by default
+* [x] runtime enforcement in the HTTP executor
+* [x] unit tests for URL policy behavior
+* [x] spec validation plus `SpecValid` condition
+
+- [x] Admission webhook deployment foundation
+* [x] validating webhook implementation exists
+* [x] webhook registration in the manager exists
+* [x] Helm deployment wiring for webhook service, cert mount, and `ValidatingWebhookConfiguration` exists
+* [x] cert-manager integration for webhook certificates exists
 
 == P1 Next
 
-- [ ] Admission validation webhook
-* reject invalid `ResourceAction` specs before runtime
-* validate mode/schedule/regex/TLS references
+- [ ] Admission validation webhook hardening
+* [x] reject invalid `ResourceAction` specs before runtime
+* [x] validate mode, schedule, URL, regex, env, and volume structure
+* [ ] validate referenced Secrets for TLS and header/env secret refs more strictly
+* [ ] add end-to-end webhook validation coverage
 
 - [ ] Correct `once` semantics at action level
-* dedupe by `uid + event + action`
-* avoid skipping all actions when only one already executed
+* [ ] dedupe by `uid + event + action`
+* [ ] avoid skipping all actions when only one action already executed
 
 - [ ] Retry and circuit breaker controls
-* cap repeated failures per target
-* cooldown windows and max in-flight per action
+* [x] basic HTTP retry policy exists
+* [ ] cap repeated failures per target
+* [ ] cooldown windows and max in-flight per action
+* [ ] circuit-breaker style suppression after repeated failures
 
 == P2 Important
 
 - [ ] Multi-tenant hardening
-* stricter secret and namespace boundaries
-* optional per-namespace quotas
+* [ ] stricter secret and namespace boundaries
+* [ ] optional per-namespace quotas
 
 - [ ] Better status model
-* per-action summaries (last N)
-* clearer failure classification
+* [ ] per-action summaries instead of only aggregate execution records
+* [ ] clearer failure classification
+* [ ] more explicit separation of HTTP and Job execution summaries
 
-- [ ] Dead-letter/fallback hooks
-* on terminal failure, emit to fallback endpoint/topic/event
+- [ ] Dead-letter or fallback hooks
+* [ ] on terminal failure, emit to fallback endpoint, topic, or event target
 
 - [ ] E2E conformance matrix
-* deterministic tests for create/update/delete, TLS/mTLS, retries, failures
+* [x] basic manager and metrics smoke tests exist
+* [ ] deterministic tests for create, update, and delete execution
+* [ ] deterministic tests for TLS and mTLS
+* [ ] deterministic tests for retries and failure behavior
+* [ ] deterministic tests for webhook validation

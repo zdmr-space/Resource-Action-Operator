@@ -1,0 +1,34 @@
+apiVersion: ops.yusaozdemir.de/v1alpha1
+kind: ResourceAction
+metadata:
+  name: deployment-job-ubuntu-secret
+  namespace: default
+spec:
+  selector:
+    group: apps
+    version: v1
+    kind: Deployment
+  events:
+    - Create
+  actions:
+    - type: job
+      mode: once
+      job:
+        image: ubuntu:24.04
+        interpreterCommand:
+          - /bin/bash
+          - -c
+        script: |
+          echo "ubuntu job example started"
+          echo "message from secret:"
+          cat /var/run/demo-secret/message
+        volumes:
+          - name: demo-secret
+            secret:
+              secretName: demo-job-secret
+        volumeMounts:
+          - name: demo-secret
+            mountPath: /var/run/demo-secret
+        automountServiceAccountToken: false
+        timeout: 30s
+        ttlSecondsAfterFinished: 300
