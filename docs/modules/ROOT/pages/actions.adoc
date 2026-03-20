@@ -3,6 +3,12 @@
 
 This page documents the supported `ResourceAction.spec.actions[]` types and the recommended security model.
 
+Example manifests in this repository:
+
+- `examples/node-label-update-http/resourceaction.yaml`
+- `examples/job-ubuntu-secret/resourceaction.yaml`
+- `examples/rbac/node-watcher-rbac.yaml`
+
 == Supported Types
 
 - `type: http`
@@ -48,6 +54,7 @@ Notes:
 - `tls.insecureSkipVerify=true` disables certificate verification for this action.
 - mTLS and custom CAs can be provided via Secret references.
 - Secret-backed headers are preferred over storing tokens directly in the manifest.
+- For cluster-scoped resources such as `Node`, the operator needs watch RBAC for that resource type.
 
 == Job Actions
 
@@ -88,6 +95,7 @@ Job actions support:
 - arbitrary container images
 - script execution via `script` and `interpreterCommand`
 - direct command execution via `command` and `args`
+- plain environment variables
 - Secret-backed environment variables
 - read-only Secret and ConfigMap volume mounts
 - explicit ServiceAccount selection
@@ -129,3 +137,4 @@ actions:
 - Store HTTP tokens, API keys, and certificates in Secrets and reference them from the action.
 - Restrict mounted volumes to read-only file inputs such as Secrets and ConfigMaps.
 - Avoid `tls.insecureSkipVerify=true` in production unless there is a controlled bootstrap or internal-only use case.
+- For cluster-scoped watchers, grant only the minimal extra RBAC required by the selected resource type.

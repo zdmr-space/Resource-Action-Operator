@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- cleaned up the repository structure and removed local demo and devcontainer scaffolding
+- renamed `template-files/` to `examples/` and added focused example manifests
+- refreshed the README and AsciiDoc documentation for Helm, quickstart, and chart values
+- kept webhook, URL policy, and Helm-based installation as the documented default paths
+
 ## 0.2.0
 
 - added `type: job` actions to create Kubernetes Jobs from `ResourceAction` objects

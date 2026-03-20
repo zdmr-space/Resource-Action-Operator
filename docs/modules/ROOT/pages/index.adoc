@@ -16,7 +16,6 @@ Resource Action Operator executes declarative HTTP and Job actions on Kubernetes
 - xref:quickstart.adoc[Quickstart]
 - xref:actions.adoc[Action Types]
 - xref:helm.adoc[Helm Deployment]
-- xref:demo.adoc[Demo Setup]
 
 == Deployment Modes
 
@@ -24,11 +23,11 @@ Resource Action Operator executes declarative HTTP and Job actions on Kubernetes
 - Helm default mode works without cert-manager.
 - Admission webhook mode is optional and requires cert-manager.
 - Kustomize deployment remains available for development workflows.
-- A second Helm chart is available for creating `type: job` ResourceActions.
+- Additional Helm charts are available for generic and job-focused `ResourceAction` resources.
 
-== Recent Changes
+== Repository Highlights
 
-- Added a Helm chart under `charts/resource-action-operator`.
-- Added Helm Make targets: `helm-lint`, `helm-template`, `helm-install`, `helm-install-webhook`, `helm-uninstall`.
-- Updated demo scripts to deploy and remove the operator with Helm.
-- Added `type: job` actions for Kubernetes Job-based script and command execution.
+- `charts/resource-action-operator` installs the operator and CRD
+- `charts/resource-action` creates generic HTTP or Job-based `ResourceAction` objects
+- `charts/resource-action-job` creates job-focused `ResourceAction` objects
+- `examples/` contains focused manifest examples for common setups

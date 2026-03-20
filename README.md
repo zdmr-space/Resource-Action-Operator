@@ -1,101 +1,44 @@
 # Resource Action Operator
 
-A Kubernetes operator for event-driven HTTP and Job actions on Kubernetes resources.
+Kubernetes operator for reacting to resource events and executing follow-up actions.
 
-## Features
+The operator watches Kubernetes resources such as `Deployment`, `Namespace`, or `Node` and triggers either:
 
-- reacts to `Create`, `Update`, `Delete`
-- filters by GVK, name/namespace regex, current labels, and label transitions on `Update`
-- executes HTTP calls with retries, timeouts, and expected status matching
-- creates Kubernetes Jobs for script/container-based actions
-- persists richer Job execution details including job name, pod name, status, exit code, and optional log tail
-- supports TLS/mTLS via Kubernetes secrets
-- supports URL safety policy (allow/block regex, default local/metadata protection)
-- stores execution history, retry/backoff metrics, and conditions in `status`
-- emits Kubernetes Events for action success/failure summaries
+- HTTP requests for webhook and API integrations
+- Kubernetes Jobs for script- or container-based automation
+
+## What It Does
+
+- reacts to `Create`, `Update`, and `Delete`
+- matches resources by GVK plus optional name, namespace, label, and label-transition filters
+- executes HTTP actions with timeout, retries, TLS/mTLS, and expected status validation
+- executes Job actions with user-provided images, scripts, env vars, mounts, and service accounts
+- stores execution state, conditions, and failure details in `status`
+- emits Kubernetes Events for successful and failed runs
+
+## Typical Use Cases
+
+- call a webhook when a `Deployment` is created
+- trigger a Job when a label is added to a `Node`
+- start recurring follow-up callbacks after a matching event
+- run cluster-local automation without embedding custom logic into applications
 
 ## Requirements
 
-- Go `1.24+`
-- Docker
-- kubectl
-- Helm `3.15+`
-- kind (for local clusters)
+- Kubernetes cluster
+- Helm `3.15+` recommended for installation
+- `kubectl`
 
-## Quickstart (local kind)
+For local development and demo runs, this repository also uses Go, Docker, and kind.
 
-```bash
-hack/demo/setup-kind.sh
-hack/demo/deploy-operator-kind.sh
-hack/demo/apply-receivers.sh
-hack/demo/apply-resourceactions.sh
-hack/demo/trigger-actions.sh
-hack/demo/show-logs.sh
-```
+## Install
 
-All-in-one run:
-
-```bash
-hack/demo/run-all.sh
-```
-
-## Reset / Cleanup
-
-Soft cleanup (cluster stays):
-
-```bash
-hack/demo/cleanup.sh
-```
-
-Hard cleanup (cluster gets deleted):
-
-```bash
-DELETE_CLUSTER=true hack/demo/cleanup.sh
-```
-
-Soft reset (redeploy, keep cluster):
-
-```bash
-hack/demo/reset.sh
-```
-
-Hard reset (delete and recreate cluster):
-
-```bash
-FULL_RESET=true hack/demo/reset.sh
-```
-
-## Install with Helm (recommended)
-
-Install/upgrade (works without cert-manager):
+Install from the local chart:
 
 ```bash
 helm upgrade --install resource-action-operator charts/resource-action-operator \
   --namespace resource-action-operator-system \
   --create-namespace
-```
-
-The default operator resource profile is intentionally modest:
-
-- requests: `50m` CPU, `128Mi` memory
-- limits: `250m` CPU, `256Mi` memory
-
-You can override it for smaller k3s nodes or busier clusters with `resources.requests.*` and `resources.limits.*`.
-
-Enable admission webhook with cert-manager:
-
-```bash
-helm upgrade --install resource-action-operator charts/resource-action-operator \
-  --namespace resource-action-operator-system \
-  --create-namespace \
-  --set webhook.enabled=true \
-  --set webhook.certManager.enabled=true
-```
-
-Uninstall:
-
-```bash
-helm uninstall resource-action-operator -n resource-action-operator-system
 ```
 
 Install from the published chart repository:
@@ -109,108 +52,37 @@ helm upgrade --install resource-action-operator resource-action-operator/resourc
   --create-namespace
 ```
 
-Makefile helpers:
-
-```bash
-make helm-lint
-make helm-template
-make helm-install
-make helm-install-webhook
-make helm-uninstall
-```
-
-Use a custom registry/repository for the operator image:
+Enable the admission webhook with cert-manager:
 
 ```bash
 helm upgrade --install resource-action-operator charts/resource-action-operator \
   --namespace resource-action-operator-system \
   --create-namespace \
-  --set image.registry=registry.example.com \
-  --set image.repository=platform/resource-action-operator \
-  --set image.tag=0.2.0-rc9
+  --set webhook.enabled=true \
+  --set webhook.certManager.enabled=true
 ```
 
-Deploy a `ResourceAction` job via the dedicated Helm chart:
+## First Example
+
+Apply a minimal HTTP-based `ResourceAction`:
 
 ```bash
-helm upgrade --install deployment-job charts/resource-action-job \
-  --namespace default \
-  --set selector.group=apps \
-  --set selector.version=v1 \
-  --set selector.kind=Deployment \
-  --set job.image.registry=registry.example.com \
-  --set job.image.repository=platform/bash-runner \
-  --set job.image.tag=1.0.0
+kubectl apply -f examples/resourceaction-default.yaml
 ```
 
-Deploy a generic `ResourceAction` via the generic chart:
+Then create a matching resource, for example:
 
 ```bash
-helm upgrade --install generic-action charts/resource-action \
-  --namespace default \
-  --set action.type=http \
-  --set selector.group=apps \
-  --set selector.version=v1 \
-  --set selector.kind=Deployment \
-  --set http.url=https://example.internal/hook
+kubectl create namespace demo-test
 ```
 
-## Release Pipeline
-
-GitHub Actions now includes:
-
-- CI for Helm linting and rendering in [helm.yml](/c:/Entwicklung/resource-action-operator/.github/workflows/helm.yml)
-- tag-based release publishing in [release.yml](/c:/Entwicklung/resource-action-operator/.github/workflows/release.yml)
-
-Release workflow outputs:
-
-- multi-arch operator image to `ghcr.io/zdmr-space/resource-action-operator`
-- published Helm chart repository via GitHub Pages
-- packaged releases for `resource-action-operator`, `resource-action-job`, and `resource-action`
-
-Create a release by pushing a tag such as `v0.2.0-rc9` or `v0.2.0`.
-
-For a manual test publish from a branch, run the `Release` workflow via `workflow_dispatch` and provide:
-
-- `version`, for example `0.2.0-rc9`
-- `publish_image=true`
-- `publish_charts=true`
-
-## Real Cluster Test
-
-Recommended order on a real cluster:
-
-1. Push the repository changes and create a tag such as `v0.2.0-rc9`.
-2. Wait for the `Release` workflow to publish the image and charts.
-3. Install the operator chart from the published repository.
-4. Verify the operator Pod is running:
-
-```bash
-kubectl -n resource-action-operator-system get pods
-```
-
-5. Install a test job action:
-
-```bash
-helm upgrade --install deployment-job resource-action-operator/resource-action-job \
-  --namespace default
-```
-
-6. Trigger the selected Kubernetes event and inspect:
-
-```bash
-kubectl get resourceaction -A
-kubectl get jobs -A
-kubectl logs -n resource-action-operator-system deploy/resource-action-operator-controller-manager
-```
+For more manifest examples, see `examples/`. For reusable Helm-based actions, see `charts/resource-action` and `charts/resource-action-job`.
 
 ## Action Types
 
 ### `type: http`
 
-Use `type: http` for HTTP or HTTPS requests. HTTPS is selected by using a `https://` URL.
-
-Example with HTTPS and disabled certificate verification:
+Use HTTP actions for webhooks and API calls.
 
 ```yaml
 apiVersion: ops.yusaozdemir.de/v1alpha1
@@ -230,28 +102,11 @@ spec:
       method: POST
       url: https://example.internal/hook
       expectedStatus: "^2..$"
-      tls:
-        insecureSkipVerify: true
 ```
-
-HTTP authentication data should be referenced from Secrets, for example via `headers`.
 
 ### `type: job`
 
-Use `type: job` to create a Kubernetes Job that runs a script or command in a user-provided container image.
-
-Job actions support:
-
-- environment variables
-- Secret-backed environment variables
-- read-only Secret and ConfigMap volume mounts
-- explicit ServiceAccount selection
-- container resource limits
-- optional `allowRunAsRoot`
-- `logTailLines` for bounded log persistence in status
-- default cleanup with `ttlSecondsAfterFinished=300` when the field is omitted
-
-Example:
+Use Job actions to create a Kubernetes Job from a user-defined image and script.
 
 ```yaml
 apiVersion: ops.yusaozdemir.de/v1alpha1
@@ -276,203 +131,98 @@ spec:
           - -c
         script: |
           echo "deployment created"
-        volumes:
-          - name: tls
-            secret:
-              secretName: api-client-cert
-          - name: scripts
-            configMap:
-              name: job-scripts
-        volumeMounts:
-          - name: tls
-            mountPath: /var/run/tls
-          - name: scripts
-            mountPath: /opt/scripts
-        serviceAccountName: restricted-runner
-        automountServiceAccountToken: false
         timeout: 30s
 ```
 
-## Label-Based Matching
+Job actions support:
 
-Matching on the current label set of a resource is already supported through `filters.labels`.
+- scripts or direct commands
+- environment variables and Secret-backed environment variables
+- Secret and ConfigMap mounts
+- explicit `serviceAccountName`
+- resource limits
+- cleanup via `ttlSecondsAfterFinished`
 
-This works for namespaced and cluster-scoped resources, for example:
+## Matching and Filters
 
-- `Deployment`
-- `Service`
-- `Namespace`
-- `Node`
+The operator selects resources by:
 
-Example for a `Node` that should trigger on `Update` when it currently has a specific label:
+- API group, version, and kind
+- event type: `Create`, `Update`, `Delete`
+- optional `nameRegex`
+- optional `namespaceRegex`
+- optional `filters.labels`
+- optional `filters.labelChanges` for update transitions
 
-```yaml
-apiVersion: ops.yusaozdemir.de/v1alpha1
-kind: ResourceAction
-metadata:
-  name: node-label-http-hook
-  namespace: default
-spec:
-  selector:
-    group: ""
-    version: v1
-    kind: Node
-  events:
-    - Update
-  filters:
-    labels:
-      demo.resource-action-operator/enabled: "true"
-  actions:
-    - type: http
-      method: POST
-      url: https://example.internal/hook
-```
-
-For cluster-scoped resources such as `Node`, the operator ServiceAccount needs additional RBAC permissions to watch that resource type.
-
-## Label Transition Matching
-
-For `Update` events, the operator can also compare the previous and current label state with `filters.labelChanges`.
-
-This allows transitions such as:
-
-- label was absent before and is now set to `true`
-- label changed from `false` to `true`
-- label was present before and is now removed
-
-Rules:
-
-- `from` omitted means the label must be absent before the update
-- `to` omitted means the label must be absent after the update
-- `from: "*"` matches any previous value as long as the label existed
-- `to: "*"` matches any new value as long as the label exists after the update
-
-Example for `absent -> true`:
-
-```yaml
-apiVersion: ops.yusaozdemir.de/v1alpha1
-kind: ResourceAction
-metadata:
-  name: node-label-transition-job
-  namespace: default
-spec:
-  selector:
-    group: ""
-    version: v1
-    kind: Node
-  events:
-    - Update
-  filters:
-    labelChanges:
-      - key: demo.resource-action-operator/enabled
-        to: "true"
-  actions:
-    - type: job
-      mode: once
-      job:
-        image: bash:5.2
-        allowRunAsRoot: true
-        interpreterCommand:
-          - /bin/bash
-          - -c
-        script: |
-          echo "label transition matched"
-```
-
-Example for `false -> true`:
+Example for matching a `Node` update when a label changes to `true`:
 
 ```yaml
 filters:
   labelChanges:
     - key: demo.resource-action-operator/enabled
-      from: "false"
       to: "true"
 ```
 
-## Security Model
+Cluster-scoped resources such as `Node` require the operator to have watch permissions for that resource type.
 
-- Job actions run as Kubernetes Jobs, not as local processes inside the operator container.
-- Job Pods default to `automountServiceAccountToken=false`.
-- Job Pods use restrictive container defaults such as `allowPrivilegeEscalation=false` and dropped Linux capabilities.
-- Additional Kubernetes API permissions should be granted only through explicitly created ServiceAccounts and RoleBindings.
-- HTTP auth tokens, API keys, and certificates should be stored in Kubernetes Secrets and referenced from the `ResourceAction`.
-- The operator chart supports optional `rbac.extraClusterRules` and `rbac.extraRules` so users can grant watch permissions for resources such as `nodes` without creating RBAC manifests by hand.
+## Security Notes
+
+- treat `ResourceAction` write access as privileged
+- keep Job actions on restricted service accounts
+- store tokens, certificates, and secrets in Kubernetes `Secret` objects
+- grant additional watch permissions explicitly through RBAC
+
+## Charts
+
+This repository contains three Helm charts:
+
+- `charts/resource-action-operator`: installs the operator
+- `charts/resource-action`: creates a generic `ResourceAction`
+- `charts/resource-action-job`: creates a job-focused `ResourceAction`
+
+## Repository Layout
+
+- `api/v1alpha1`: CRD types, validation, webhook logic
+- `internal/controller`: controller-runtime reconciliation and watches
+- `internal/engine`: execution logic for HTTP and Job actions
+- `charts/`: Helm charts for operator and reusable actions
+- `config/`: generated and deployment manifests
+- `examples/`: standalone example manifests and demo scenarios
+- `docs/`: AsciiDoc documentation
+- `test/`: end-to-end test helpers and suites
 
 ## Development
 
+Run tests:
+
 ```bash
 make test
-make run
-make build
 ```
 
-Kustomize-based deploy to current kube context:
+Run the operator locally against the current kube context:
+
+```bash
+make run
+```
+
+Deploy with Kustomize:
 
 ```bash
 make deploy IMG=<image>
 ```
 
-Deploy with admission webhook + cert-manager wiring:
+Deploy with webhook support:
 
 ```bash
 make deploy-webhook IMG=<image>
 ```
 
-Notes:
-- `make deploy` works without cert-manager.
-- `make deploy-webhook` requires cert-manager CRDs/controllers installed.
-
-## Important Paths
-
-- CRD/API: `api/v1alpha1`
-- Controller: `internal/controller`
-- Engine/Executor: `internal/engine`
-- Manifests: `config/`
-- Demo setup: `hack/demo/`
-- ResourceAction templates: `template-files/demo/`
-- Job action example: `template-files/resourceaction-job-bash.yaml`
-- Generic ResourceAction chart: `charts/resource-action`
-- Docs (AsciiDoc): `docs/`
-
 ## Documentation
 
-AsciiDoc structure is prepared under `docs/`.
-
-Entry point:
-
-```bash
-docs/README.adoc
-```
-
-URL policy details and examples:
-
-```bash
-docs/modules/ROOT/pages/url-policy.adoc
-```
-
-## Metrics
-
-The operator exposes Prometheus metrics on the controller-runtime metrics endpoint, including:
-
-- `resource_action_operator_http_runs_total{result}`
-- `resource_action_operator_http_actions_total`
-- `resource_action_operator_http_attempts_total`
-- `resource_action_operator_http_retries_total{type}`
-- `resource_action_operator_http_backoff_seconds_total`
-- `resource_action_operator_http_duration_seconds{result}`
-- `resource_action_operator_http_last_status_total{class}`
-
-Detailed usage and PromQL examples:
-
-```bash
-docs/modules/ROOT/pages/metrics.adoc
-```
-
-Additional Job metrics now include:
-
-- `resource_action_operator_job_runs_total{result}`
-- `resource_action_operator_job_duration_seconds{result}`
-- `resource_action_operator_job_log_tail_lines_total`
+- docs entry point: `docs/README.adoc`
+- quickstart: `docs/modules/ROOT/pages/quickstart.adoc`
+- action details: `docs/modules/ROOT/pages/actions.adoc`
+- Helm usage: `docs/modules/ROOT/pages/helm.adoc`
 
 ## License
 

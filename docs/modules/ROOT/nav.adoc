@@ -2,7 +2,6 @@
 * xref:quickstart.adoc[Quickstart]
 * xref:actions.adoc[Action Types]
 * xref:helm.adoc[Helm Deployment]
-* xref:demo.adoc[Demo Setup]
 * xref:url-policy.adoc[URL Safety Policy]
 * xref:metrics.adoc[Metrics]
 * xref:todo.adoc[ToDo]

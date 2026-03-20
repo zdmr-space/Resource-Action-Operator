@@ -18,14 +18,12 @@ docs/
         index.adoc
         quickstart.adoc
         helm.adoc
-        demo.adoc
 ----
 
-Important pages for recent deployment and demo changes:
+Important pages for deployment and chart usage:
 
 - `docs/modules/ROOT/pages/index.adoc`
 - `docs/modules/ROOT/pages/quickstart.adoc`
-- `docs/modules/ROOT/pages/demo.adoc`
 
 == Publishing Options
 
