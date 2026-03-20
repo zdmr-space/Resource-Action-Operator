@@ -26,6 +26,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -37,8 +40,11 @@ jobs:
       - name: Build docs site
         run: npx antora docs-site-playbook.yml
 
+      - name: Disable Jekyll processing
+        run: touch build/site/.nojekyll
+
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: build/site
 

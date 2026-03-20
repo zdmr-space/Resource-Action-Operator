@@ -76,7 +76,7 @@ Then create a matching resource, for example:
 kubectl create namespace demo-test
 ```
 
-For more manifest examples, see `examples/`. For reusable Helm-based actions, see `charts/resource-action` and `charts/resource-action-job`.
+For more manifest examples, see `examples/`. For a guided walkthrough of the demo scenarios, see `docs/modules/ROOT/pages/demo.adoc`. For action details, see `docs/modules/ROOT/pages/actions.adoc`. For Helm installation and chart values, see `docs/modules/ROOT/pages/helm.adoc`. For reusable Helm-based actions, see `charts/resource-action` and `charts/resource-action-job`.
 
 ## Action Types
 
@@ -221,6 +221,7 @@ make deploy-webhook IMG=<image>
 
 - docs entry point: `docs/README.adoc`
 - quickstart: `docs/modules/ROOT/pages/quickstart.adoc`
+- demo scenarios: `docs/modules/ROOT/pages/demo.adoc`
 - action details: `docs/modules/ROOT/pages/actions.adoc`
 - Helm usage: `docs/modules/ROOT/pages/helm.adoc`
 
