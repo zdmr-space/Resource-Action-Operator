@@ -113,7 +113,7 @@ Defaults file: link:../../../../../charts/resource-action-operator/values.yaml[c
 
 | `image.tag`
 | string
-| `0.3.1`
+| `0.3.2`
 | Operator image tag, ignored when `image.digest` is set.
 
 | `image.digest`

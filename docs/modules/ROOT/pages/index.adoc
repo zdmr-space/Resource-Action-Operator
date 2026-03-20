@@ -16,6 +16,7 @@ Resource Action Operator executes declarative HTTP and Job actions on Kubernetes
 - xref:quickstart.adoc[Quickstart]
 - xref:actions.adoc[Action Types]
 - xref:helm.adoc[Helm Deployment]
+- xref:demo.adoc[Demo Scenarios]
 
 == Deployment Modes
 

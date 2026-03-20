@@ -2,6 +2,10 @@
 
 This directory contains focused example manifests for the Resource Action Operator.
 
+For a guided walkthrough of the demo scenarios and the order in which supporting resources and `ResourceAction` objects should be applied, see:
+
+- `docs/modules/ROOT/pages/demo.adoc`
+
 The main examples are:
 
 - `rbac/node-watcher-rbac.yaml`: additional RBAC so the operator can watch `Node` resources

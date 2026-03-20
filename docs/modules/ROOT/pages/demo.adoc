@@ -1,0 +1,298 @@
+= Demo Scenarios
+:page-title: Demo Scenarios
+
+This page explains the example scenarios shipped in `examples/demo/`.
+
+The order matters:
+
+1. install the operator
+2. install support workloads such as an in-cluster HTTP receiver if an HTTP action needs a target
+3. apply the `ResourceAction`
+4. create or update the matching Kubernetes resource that should trigger the action
+5. inspect Jobs, logs, and `ResourceAction.status`
+
+== Prerequisites
+
+- a Kubernetes cluster
+- `kubectl`
+- Helm `3.15+`
+
+== 1. Install The Operator
+
+Install the operator first. For demos that watch `Node` resources, use the extra RBAC values file so the operator can watch `Node` objects and inspect Job Pods and logs.
+
+[source,bash]
+----
+helm repo add resource-action-operator https://zdmr-space.github.io/Resource-Action-Operator
+helm repo update
+
+helm upgrade --install resource-action-operator \
+  resource-action-operator/resource-action-operator \
+  --version 0.3.2 \
+  --namespace resource-action-operator-system \
+  --create-namespace \
+  -f examples/helm/operator-node-watch-values.yaml
+----
+
+Verify:
+
+[source,bash]
+----
+kubectl get crd resourceactions.ops.yusaozdemir.de
+kubectl -n resource-action-operator-system get pods
+----
+
+== 2. Why The HTTP Sink Exists
+
+Several HTTP demos send requests to an in-cluster NGINX Service instead of an external webhook.
+
+That makes the examples self-contained:
+
+- no external URL is required
+- the target is reachable from inside the cluster
+- you can verify HTTP actions without introducing another system first
+
+The sink is defined in:
+
+- `examples/demo/namespace-http-sink.yaml`
+
+It creates:
+
+- namespace `demo-http-sink`
+- a ConfigMap with a minimal NGINX config
+- a Deployment named `ra-http-sink`
+- a Service named `ra-http-sink`
+
+Apply it before any example that sends HTTP requests to:
+
+- `http://ra-http-sink.demo-http-sink.svc.cluster.local/hook`
+
+[source,bash]
+----
+kubectl apply -f examples/demo/namespace-http-sink.yaml
+kubectl -n demo-http-sink get all
+----
+
+== 3. Namespace Create To HTTP
+
+Files:
+
+- `examples/demo/resourceaction-namespace-http.yaml`
+- `examples/demo/trigger-namespace-http.yaml`
+
+What this scenario does:
+
+- grants the operator watch access to `Namespace`
+- creates a `ResourceAction` for `Namespace` `Create`
+- filters namespaces by `nameRegex: ^demo-http-trigger-.*$`
+- sends an HTTP POST to the NGINX sink
+
+Why the extra RBAC is needed:
+
+- `Namespace` is cluster-scoped
+- the operator needs `get`, `list`, and `watch` for `namespaces`
+
+Apply:
+
+[source,bash]
+----
+kubectl apply -f examples/demo/resourceaction-namespace-http.yaml
+kubectl apply -f examples/demo/trigger-namespace-http.yaml
+----
+
+Verify:
+
+[source,bash]
+----
+kubectl -n default get resourceaction namespace-http-hook -o yaml
+kubectl -n resource-action-operator-system logs deploy/resource-action-operator-controller-manager
+----
+
+== 4. Namespace Create To Job
+
+Files:
+
+- `examples/demo/resourceaction-namespace-job-bash.yaml`
+- `examples/demo/trigger-namespace-job.yaml`
+
+What this scenario does:
+
+- creates a `ResourceAction` for `Namespace` `Create`
+- filters namespaces by `nameRegex: ^demo-job-trigger-.*$`
+- creates a Kubernetes Job instead of sending an HTTP request
+
+Apply:
+
+[source,bash]
+----
+kubectl apply -f examples/demo/resourceaction-namespace-job-bash.yaml
+kubectl apply -f examples/demo/trigger-namespace-job.yaml
+----
+
+Verify:
+
+[source,bash]
+----
+kubectl get jobs -A
+kubectl get pods -A
+kubectl -n default get resourceaction namespace-job-bash -o yaml
+----
+
+== 5. Node Label To HTTP
+
+Files:
+
+- `examples/demo/operator-node-watch-rbac.yaml`
+- `examples/demo/resourceaction-node-label-http.yaml`
+
+What this scenario does:
+
+- grants the operator watch access to `Node`
+- reacts to `Node` `Update`
+- matches nodes with label `demo.resource-action-operator/enabled=true`
+- sends an HTTP POST to the NGINX sink
+
+Apply:
+
+[source,bash]
+----
+kubectl apply -f examples/demo/namespace-http-sink.yaml
+kubectl apply -f examples/demo/operator-node-watch-rbac.yaml
+kubectl apply -f examples/demo/resourceaction-node-label-http.yaml
+----
+
+Trigger:
+
+[source,bash]
+----
+kubectl label node <node-name> demo.resource-action-operator/enabled=true --overwrite
+----
+
+== 6. Node Label To Job
+
+Files:
+
+- `examples/demo/operator-node-watch-rbac.yaml`
+- `examples/demo/resourceaction-node-label-job.yaml`
+
+What this scenario does:
+
+- reacts to `Node` `Update`
+- matches nodes with label `demo.resource-action-operator/enabled=true`
+- creates a Job based on the matching update
+
+Apply:
+
+[source,bash]
+----
+kubectl apply -f examples/demo/operator-node-watch-rbac.yaml
+kubectl apply -f examples/demo/resourceaction-node-label-job.yaml
+----
+
+Trigger:
+
+[source,bash]
+----
+kubectl label node <node-name> demo.resource-action-operator/enabled=true --overwrite
+----
+
+Verify:
+
+[source,bash]
+----
+kubectl get jobs -A
+kubectl get pods -A
+kubectl -n resource-action-operator-system logs deploy/resource-action-operator-controller-manager
+----
+
+== 7. Node Label Transition To Job
+
+File:
+
+- `examples/demo/resourceaction-node-label-transition-job.yaml`
+
+What this scenario does:
+
+- reacts only to `Update`
+- uses `filters.labelChanges`
+- matches when `demo.resource-action-operator/enabled` changes to `true`
+
+This is different from plain label matching:
+
+- `filters.labels` checks the current label set
+- `filters.labelChanges` checks the transition from old to new values
+
+Apply:
+
+[source,bash]
+----
+kubectl apply -f examples/demo/operator-node-watch-rbac.yaml
+kubectl apply -f examples/demo/resourceaction-node-label-transition-job.yaml
+kubectl label node <node-name> demo.resource-action-operator/enabled=true --overwrite
+----
+
+== 8. Helm-Based Node Demo
+
+If you want the same idea as a Helm-based demo instead of raw manifests, use:
+
+- `examples/helm/operator-node-watch-values.yaml`
+- `examples/helm/resource-action-job-node-label-values.yaml`
+
+This scenario:
+
+- installs the operator with Node and Pod inspection RBAC
+- creates a `ResourceAction` using the `resource-action-job` Helm chart
+- runs an `ubuntu:24.04` Job that does `echo`, `sleep`, `echo`
+
+[source,bash]
+----
+helm upgrade --install node-env-demo-rao-job \
+  resource-action-operator/resource-action-job \
+  --version 0.3.2 \
+  --namespace default \
+  -f examples/helm/resource-action-job-node-label-values.yaml
+----
+
+Trigger:
+
+[source,bash]
+----
+kubectl label node <node-name> env=demo-rao --overwrite
+----
+
+== 9. Deployment HTTP And TLS Examples
+
+Files:
+
+- `examples/demo/resourceaction-deployment-http.yaml`
+- `examples/demo/resourceaction-deployment-tls.yaml`
+
+These two manifests are reference examples for:
+
+- `Deployment` create/delete events
+- HTTP receiver integration
+- TLS receiver integration with custom CA handling
+
+Important:
+
+- both expect support workloads in namespace `ra-demo`
+- those receiver workloads are not included anymore in the current `examples/` set
+- treat these two manifests as reference configuration unless you already have matching Services and Secrets in `ra-demo`
+
+== Troubleshooting
+
+If HTTP actions are used:
+
+- make sure the HTTP sink or target Service exists before applying the `ResourceAction`
+- make sure the DNS name in the manifest matches the actual Service
+
+If `Node` examples are used:
+
+- ensure the operator has `Node` watch RBAC
+- for Job details and log tailing, ensure the operator also has `pods` and `pods/log` access
+
+If logs show `Skipping already executed action`:
+
+- the current `once` implementation deduplicates by resource UID and event
+- reusing the same resource for the same event may not execute the action again
+- trigger the scenario on a different object or recreate the `ResourceAction`

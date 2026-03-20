@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   registry: ghcr.io
   repository: zdmr-space/resource-action-operator
-  tag: 0.3.1
+  tag: 0.3.2
   digest: ""
   pullPolicy: IfNotPresent
 

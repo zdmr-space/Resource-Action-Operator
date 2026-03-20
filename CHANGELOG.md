@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.2
+
+- added a central Antora-based demo documentation page under `docs/`
+- documented end-to-end demo scenarios and their dependencies in a clearer order
+- added GitHub Pages publishing for the AsciiDoc documentation via Antora
+- added Helm values examples for operator Node watch RBAC and a Node-triggered Ubuntu Job demo
+
 ## 0.3.1
 
 - cleaned up the repository structure and removed local demo and devcontainer scaffolding
