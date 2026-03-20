@@ -2,6 +2,27 @@ apiVersion: v1
 entries:
   resource-action:
   - apiVersion: v2
+    appVersion: 0.3.2
+    created: "2026-03-20T18:32:29.056980909Z"
+    description: Helm chart for creating generic ResourceAction resources
+    digest: d1482de4485f104eeec20a8f3a0c41ca91fd013952671e88fc3ea04dc6be531d
+    home: https://github.com/zdmr-space/Resource-Action-Operator
+    keywords:
+    - kubernetes
+    - resourceaction
+    - http
+    - jobs
+    - automation
+    maintainers:
+    - name: Resource Action Operator Maintainers
+    name: resource-action
+    sources:
+    - https://github.com/zdmr-space/Resource-Action-Operator
+    type: application
+    urls:
+    - https://github.com/zdmr-space/Resource-Action-Operator/releases/download/resource-action-0.3.2/resource-action-0.3.2.tgz
+    version: 0.3.2
+  - apiVersion: v2
     appVersion: 0.3.1
     created: "2026-03-20T17:25:45.202177485Z"
     description: Helm chart for creating generic ResourceAction resources
@@ -86,6 +107,26 @@ entries:
     - https://github.com/zdmr-space/Resource-Action-Operator/releases/download/resource-action-0.2.0-rc5/resource-action-0.2.0-rc5.tgz
     version: 0.2.0-rc5
   resource-action-job:
+  - apiVersion: v2
+    appVersion: 0.3.2
+    created: "2026-03-20T18:32:29.205648128Z"
+    description: Helm chart for creating ResourceAction job actions
+    digest: bca51bab27262704cb1c596e9e41928ab01122bfaa072d86a38bfcf706ca10aa
+    home: https://github.com/zdmr-space/Resource-Action-Operator
+    keywords:
+    - kubernetes
+    - resourceaction
+    - jobs
+    - automation
+    maintainers:
+    - name: Resource Action Operator Maintainers
+    name: resource-action-job
+    sources:
+    - https://github.com/zdmr-space/Resource-Action-Operator
+    type: application
+    urls:
+    - https://github.com/zdmr-space/Resource-Action-Operator/releases/download/resource-action-job-0.3.2/resource-action-job-0.3.2.tgz
+    version: 0.3.2
   - apiVersion: v2
     appVersion: 0.3.1
     created: "2026-03-20T17:25:45.386465144Z"
@@ -227,6 +268,27 @@ entries:
     - https://github.com/zdmr-space/Resource-Action-Operator/releases/download/resource-action-job-0.2.0-rc3/resource-action-job-0.2.0-rc3.tgz
     version: 0.2.0-rc3
   resource-action-operator:
+  - apiVersion: v2
+    appVersion: 0.3.2
+    created: "2026-03-20T18:32:29.364381604Z"
+    description: Kubernetes operator for event-driven HTTP and Job actions on Kubernetes
+      resources
+    digest: bcc0a39a51350d6894950b25d8d3b3e961f670cf254bd6b4c07ccbae153d3c99
+    home: https://github.com/zdmr-space/Resource-Action-Operator
+    keywords:
+    - kubernetes
+    - operator
+    - webhook
+    - automation
+    maintainers:
+    - name: Resource Action Operator Maintainers
+    name: resource-action-operator
+    sources:
+    - https://github.com/zdmr-space/Resource-Action-Operator
+    type: application
+    urls:
+    - https://github.com/zdmr-space/Resource-Action-Operator/releases/download/resource-action-operator-0.3.2/resource-action-operator-0.3.2.tgz
+    version: 0.3.2
   - apiVersion: v2
     appVersion: 0.3.1
     created: "2026-03-20T17:25:45.554998097Z"
@@ -395,4 +457,4 @@ entries:
     urls:
     - https://github.com/zdmr-space/Resource-Action-Operator/releases/download/resource-action-operator-0.2.0-rc3/resource-action-operator-0.2.0-rc3.tgz
     version: 0.2.0-rc3
-generated: "2026-03-20T17:25:45.55509056Z"
+generated: "2026-03-20T18:32:29.364494598Z"
